@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@source "./src/**/*.rs";
+
+@theme {
+    --color-surface: #1c1e27;
+    --color-tile: #2b2f40;
+    --color-line: #3a3f52;
+    --color-muted: #8b93ad;
+    --color-accent: #eec942;
+    --color-accent-ink: #eec942;
+    --color-sun: #eec942;
+    --color-mango: #ff9b61;
+    --color-lime: #9ae33d;
+    --color-lilac: #ba84fb;
+    --color-sky: #70cbf3;
+    --color-lead: #f6f6f6;
+    --color-black: #1c1e27;
+    --color-red-500: #c92a2a;
+    --color-red-300: #ff8f85;
+    --color-green-400: #b6f36b;
+    --color-green-500: #9ae33d;
+}
