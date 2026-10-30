@@ -1,0 +1,207 @@
+/* Only the base surface: colours live in tailwind.css @theme as --color-*. */
+body {
+    background-color: #1c1e27;
+    color: #f6f6f6;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.dx-chart-bar,
+.dx-chart-line,
+.dx-pie-chart {
+    display: block;
+    overflow: visible;
+}
+
+.dx-bar {
+    stroke: #eec942;
+    stroke-linecap: round;
+}
+
+.dx-chart-volume .dx-bar,
+.dx-chart-volume .dx-line-path,
+.dx-chart-volume .dx-line-dot {
+    stroke: #ff9b61;
+}
+
+.dx-chart-time .dx-bar,
+.dx-chart-time .dx-line-path,
+.dx-chart-time .dx-line-dot {
+    stroke: #70cbf3;
+}
+
+.dx-grid-line {
+    stroke: #343a4c;
+}
+
+text.dx-grid-label {
+    fill: #787f9a;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+span.dx-grid-label {
+    color: #787f9a;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.dx-bar-label {
+    fill: #787f9a;
+}
+
+.dx-line-path {
+    stroke: #eec942;
+}
+
+.dx-line-dot {
+    stroke: #eec942;
+}
+
+.dx-slice {
+    stroke: #1c1e27;
+    stroke-width: 3;
+}
+
+.dx-label {
+    fill: #f6f6f6;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.dx-series-0 .dx-slice {
+    fill: #eec942;
+}
+.dx-series-1 .dx-slice {
+    fill: #ff9b61;
+}
+.dx-series-2 .dx-slice {
+    fill: #9ae33d;
+}
+.dx-series-3 .dx-slice {
+    fill: #ba84fb;
+}
+.dx-series-4 .dx-slice {
+    fill: #70cbf3;
+}
+.dx-series-5 .dx-slice {
+    fill: #fdde67;
+}
+.dx-series-6 .dx-slice {
+    fill: #c8a0ff;
+}
+.dx-series-7 .dx-slice {
+    fill: #b6f36b;
+}
+
+@keyframes sheet-in {
+    from {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+}
+
+@keyframes sheet-out {
+    to {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+@keyframes page-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+.page-shell::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    background: #1c1e27;
+    animation: page-fade 240ms ease-out both;
+}
+
+.sheet-backdrop {
+    animation: fade-in 200ms ease-out both;
+}
+
+.sheet-panel {
+    animation: sheet-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.reveal-enter {
+    animation: rise-in 220ms ease-out both;
+}
+
+.sheet-backdrop.is-closing {
+    animation: fade-out 200ms ease-in both;
+}
+
+.sheet-panel.is-closing {
+    animation: sheet-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.is-closing {
+    pointer-events: none;
+}
+
+button {
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        opacity 160ms ease,
+        transform 140ms ease;
+}
+
+button:not(:disabled):active {
+    transform: scale(0.97);
+}
+
+a {
+    transition:
+        color 160ms ease,
+        background-color 160ms ease,
+        opacity 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+.dob-wheel::-webkit-scrollbar {
+    display: none;
+}
