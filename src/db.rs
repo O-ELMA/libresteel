@@ -145,6 +145,15 @@ fn migrate(conn: &Connection, dir: &std::path::Path) -> Result<()> {
         )?;
         conn.pragma_update(None, "user_version", 14)?;
     }
+    if version < 15 {
+        add_column(
+            conn,
+            "session_exercise",
+            "removed_sets",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
+        conn.pragma_update(None, "user_version", 15)?;
+    }
     Ok(())
 }
 
@@ -1247,26 +1256,27 @@ pub fn replace_exercise(plan_exercise_id: i64, exercise_id: i64) -> Result<()> {
     Ok(())
 }
 
-pub fn day_muscle_counts(day_id: i64) -> Result<Vec<(String, i64)>> {
+pub fn day_muscle_counts(day_id: i64) -> Result<Vec<(String, i64, i64)>> {
     muscle_counts("d.id = ?1", day_id)
 }
 
-pub fn routine_muscle_counts(routine_id: i64) -> Result<Vec<(String, i64)>> {
+pub fn routine_muscle_counts(routine_id: i64) -> Result<Vec<(String, i64, i64)>> {
     muscle_counts("d.plan_id = ?1", routine_id)
 }
 
-fn muscle_counts(filter: &str, key: i64) -> Result<Vec<(String, i64)>> {
+fn muscle_counts(filter: &str, key: i64) -> Result<Vec<(String, i64, i64)>> {
     let db = DB.get().context("database not initialised")?;
     let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
     let mut stmt = conn.prepare(&format!(
-        "SELECT e.muscle_main, COUNT(*)
+        "SELECT e.muscle_main, COUNT(DISTINCT pe.id), COUNT(ps.id)
          FROM plan_day d
          JOIN plan_exercise pe ON pe.plan_day_id = d.id
          JOIN exercise e ON e.id = pe.exercise_id
+         LEFT JOIN plan_set ps ON ps.plan_exercise_id = pe.id
          WHERE e.muscle_main IS NOT NULL AND {filter}
          GROUP BY 1 ORDER BY 2 DESC"
     ))?;
-    let rows = stmt.query_map([key], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let rows = stmt.query_map([key], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
     let counts = rows.collect::<Result<Vec<_>, _>>()?;
     drop(stmt);
     drop(conn);
@@ -1484,6 +1494,7 @@ pub struct SessionExercise {
     pub prior_1rm: Option<f64>,
     pub targets: Vec<RoutineSet>,
     pub logged: Vec<SessionSet>,
+    pub removed: Vec<i64>,
 }
 
 fn session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ActiveSession> {
@@ -1527,23 +1538,40 @@ pub fn finished_sessions() -> Result<Vec<ActiveSession>> {
     Ok(sessions)
 }
 
-pub fn volume_between(start: i64, end: i64) -> Result<f64> {
+pub fn sets_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>> {
     let db = DB.get().context("database not initialised")?;
     let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
-    let volume = conn
-        .query_row(
-            "SELECT SUM(s.weight * s.reps)
-             FROM session_set s
-             JOIN session_exercise se ON se.id = s.session_exercise_id
-             JOIN session sn ON sn.id = se.session_id
-             WHERE s.weight IS NOT NULL AND s.reps IS NOT NULL
-               AND sn.started_at >= ?1 AND sn.started_at < ?2",
-            params![start, end],
-            |row| row.get::<_, Option<f64>>(0),
-        )?
-        .unwrap_or(0.0);
+    let mut stmt = conn.prepare(
+        "SELECT sn.started_at, COUNT(*)
+         FROM session_set s
+         JOIN session_exercise se ON se.id = s.session_exercise_id
+         JOIN session sn ON sn.id = se.session_id
+         WHERE (s.weight > 0 OR s.reps > 0 OR s.seconds > 0 OR s.distance_m > 0)
+           AND sn.started_at >= ?1 AND sn.started_at < ?2
+         GROUP BY sn.id",
+    )?;
+    let rows = stmt.query_map(params![start, end], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let counts = rows.collect::<Result<Vec<_>, _>>()?;
+    drop(stmt);
     drop(conn);
-    Ok(volume)
+    Ok(counts)
+}
+
+pub fn sets_between(start: i64, end: i64) -> Result<i64> {
+    let db = DB.get().context("database not initialised")?;
+    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let count = conn.query_row(
+        "SELECT COUNT(*)
+         FROM session_set s
+         JOIN session_exercise se ON se.id = s.session_exercise_id
+         JOIN session sn ON sn.id = se.session_id
+         WHERE (s.weight > 0 OR s.reps > 0 OR s.seconds > 0 OR s.distance_m > 0)
+           AND sn.started_at >= ?1 AND sn.started_at < ?2",
+        params![start, end],
+        |row| row.get::<_, i64>(0),
+    )?;
+    drop(conn);
+    Ok(count)
 }
 
 pub fn workout_seconds_between(start: i64, end: i64) -> Result<i64> {
@@ -1611,25 +1639,6 @@ pub fn first_session_at() -> Result<Option<i64>> {
     let first = conn.query_row("SELECT MIN(started_at) FROM session", [], |row| row.get(0))?;
     drop(conn);
     Ok(first)
-}
-
-pub fn volume_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, f64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut stmt = conn.prepare(
-        "SELECT sn.started_at, SUM(s.weight * s.reps)
-         FROM session_set s
-         JOIN session_exercise se ON se.id = s.session_exercise_id
-         JOIN session sn ON sn.id = se.session_id
-         WHERE s.weight IS NOT NULL AND s.reps IS NOT NULL
-           AND sn.started_at >= ?1 AND sn.started_at < ?2
-         GROUP BY sn.id",
-    )?;
-    let rows = stmt.query_map(params![start, end], |row| Ok((row.get(0)?, row.get(1)?)))?;
-    let volumes = rows.collect::<Result<Vec<_>, _>>()?;
-    drop(stmt);
-    drop(conn);
-    Ok(volumes)
 }
 
 pub fn workout_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>> {
@@ -1813,6 +1822,7 @@ pub fn finished_session_exercises(session: &ActiveSession) -> Result<Vec<Session
     session_exercises_inner(session, true)
 }
 
+#[allow(clippy::too_many_lines)]
 fn session_exercises_inner(
     session: &ActiveSession,
     finished_only: bool,
@@ -1824,7 +1834,7 @@ fn session_exercises_inner(
         "SELECT se.id, se.exercise_id, COALESCE({name}, se.name), e.muscle_main, e.log_type,
                 COALESCE(pe.rest_seconds,
                          (SELECT rest_seconds FROM user_setting WHERE id = 1), 60),
-                pe.id, se.superset_group
+                pe.id, se.superset_group, se.removed_sets
          FROM session_exercise se
          JOIN exercise e ON e.id = se.exercise_id
          LEFT JOIN plan_exercise pe
@@ -1842,6 +1852,7 @@ fn session_exercises_inner(
                 row.get::<_, i64>(5)?,
                 row.get::<_, Option<i64>>(6)?,
                 row.get::<_, Option<i64>>(7)?,
+                row.get::<_, String>(8)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1871,8 +1882,17 @@ fn session_exercises_inner(
          FROM plan_set WHERE plan_exercise_id = ?1 ORDER BY set_number",
     )?;
     let mut exercises = Vec::new();
-    for (id, exercise_id, name, muscle_main, log_type, rest_seconds, plan_exercise, superset) in
-        base
+    for (
+        id,
+        exercise_id,
+        name,
+        muscle_main,
+        log_type,
+        rest_seconds,
+        plan_exercise,
+        superset,
+        removed_sets,
+    ) in base
     {
         let targets = match plan_exercise {
             Some(plan_exercise) => sets_stmt
@@ -1888,6 +1908,7 @@ fn session_exercises_inner(
                 .collect::<Result<Vec<_>, _>>()?,
             None => Vec::new(),
         };
+        let removed: Vec<i64> = serde_json::from_str(&removed_sets).unwrap_or_default();
         exercises.push(SessionExercise {
             id,
             exercise_id,
@@ -1904,6 +1925,7 @@ fn session_exercises_inner(
                 .filter(|(owner, _)| *owner == id)
                 .map(|(_, set)| set.clone())
                 .collect(),
+            removed,
         });
     }
     drop(sets_stmt);
@@ -1963,7 +1985,45 @@ pub fn log_set(
             now()
         ],
     )?;
+    let mut removed = removed_sets(&conn, session_exercise_id)?;
+    if let Some(position) = removed.iter().position(|number| *number == set_number) {
+        removed.remove(position);
+        store_removed(&conn, session_exercise_id, &removed)?;
+    }
     drop(conn);
+    Ok(())
+}
+
+pub fn remove_session_set(session_exercise_id: i64, set_number: i64) -> Result<()> {
+    let db = DB.get().context("database not initialised")?;
+    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    conn.execute(
+        "DELETE FROM session_set WHERE session_exercise_id = ?1 AND set_number = ?2",
+        params![session_exercise_id, set_number],
+    )?;
+    let mut removed = removed_sets(&conn, session_exercise_id)?;
+    if !removed.contains(&set_number) {
+        removed.push(set_number);
+        store_removed(&conn, session_exercise_id, &removed)?;
+    }
+    drop(conn);
+    Ok(())
+}
+
+fn removed_sets(conn: &Connection, session_exercise_id: i64) -> Result<Vec<i64>> {
+    let text: String = conn.query_row(
+        "SELECT removed_sets FROM session_exercise WHERE id = ?1",
+        [session_exercise_id],
+        |row| row.get(0),
+    )?;
+    Ok(serde_json::from_str(&text).unwrap_or_default())
+}
+
+fn store_removed(conn: &Connection, session_exercise_id: i64, removed: &[i64]) -> Result<()> {
+    conn.execute(
+        "UPDATE session_exercise SET removed_sets = ?2 WHERE id = ?1",
+        params![session_exercise_id, serde_json::to_string(removed)?],
+    )?;
     Ok(())
 }
 

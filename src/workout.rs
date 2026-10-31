@@ -1356,11 +1356,11 @@ fn MuscleFocus(
     let mut groups = FOCUS_GROUPS
         .iter()
         .map(|label| {
-            let count = rows
+            let (exercises, sets) = rows
                 .iter()
-                .find(|(muscle, _)| muscle == label)
-                .map_or(0, |(_, count)| *count);
-            ((*label).to_string(), count)
+                .find(|(muscle, _, _)| muscle == label)
+                .map_or((0, 0), |(_, exercises, sets)| (*exercises, *sets));
+            ((*label).to_string(), exercises, sets)
         })
         .collect::<Vec<_>>();
     groups.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -1375,20 +1375,31 @@ fn MuscleFocus(
             }
             div { class: "max-h-[65dvh] overflow-y-auto px-3 pb-2",
                 div { class: "mt-2",
-                    BodyMap { counts: rows }
+                    BodyMap {
+                        counts: rows.iter().map(|(muscle, exercises, _)| (muscle.clone(), *exercises)).collect()
+                    }
                 }
-                div { class: "mt-4 flex flex-col",
-                    for (label, count) in groups {
+                div { class: "mt-4 grid grid-cols-[1fr_5.5rem_4rem] items-center gap-2 border-b border-line pb-2 text-xs font-semibold uppercase tracking-wide text-muted",
+                    span {}
+                    span { class: "text-right", "{i18n.t(\"nav.exercises\")}" }
+                    span { class: "text-right", "{i18n.t(\"progress.sets\")}" }
+                }
+                div { class: "flex flex-col",
+                    for (label, exercises, sets) in groups {
                         div {
                             key: "{label}",
-                            class: "flex items-center justify-between gap-4 border-b border-line py-2.5",
+                            class: "grid grid-cols-[1fr_5.5rem_4rem] items-center gap-2 border-b border-line py-2.5",
                             span {
-                                class: if count == 0 { "text-[15px] text-muted" } else { "text-[15px]" },
+                                class: if exercises == 0 { "text-[15px] text-muted" } else { "text-[15px]" },
                                 "{i18n.value(\"exercises.muscles\", &label)}"
                             }
                             span {
-                                class: if count == 0 { "text-sm text-muted" } else { "text-sm font-semibold text-lilac" },
-                                "{i18n.tn(\"workout.exercises\", count)}"
+                                class: if exercises == 0 { "text-right text-sm text-muted" } else { "text-right text-sm font-semibold text-lilac" },
+                                "{exercises}"
+                            }
+                            span {
+                                class: if sets == 0 { "text-right text-sm text-muted" } else { "text-right text-sm font-semibold text-lilac" },
+                                "{sets}"
                             }
                         }
                     }

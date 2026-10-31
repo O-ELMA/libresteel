@@ -42,6 +42,7 @@
     --radius-xl: 0.75rem;
     --radius-2xl: 1rem;
     --radius-3xl: 1.5rem;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
     --ease-out: cubic-bezier(0, 0, 0.2, 1);
     --aspect-video: 16 / 9;
     --default-transition-duration: 150ms;
@@ -596,6 +597,9 @@
   .grid-cols-7 {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
+  .grid-cols-\[1fr_5\.5rem_4rem\] {
+    grid-template-columns: 1fr 5.5rem 4rem;
+  }
   .flex-col {
     flex-direction: column;
   }
@@ -1062,6 +1066,9 @@
   }
   .text-end {
     text-align: end;
+  }
+  .text-right {
+    text-align: right;
   }
   .text-start {
     text-align: start;

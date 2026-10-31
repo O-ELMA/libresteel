@@ -315,7 +315,7 @@
   },
   "progress": {
     "all": "الكل",
-    "totalVolume": "الحجم الإجمالي",
+    "totalSets": "إجمالي المجموعات",
     "totalTime": "إجمالي وقت التمرين",
     "averagePerWeek": "المتوسط الأسبوعي",
     "nothingLogged": "لا شيء مسجّل في هذه الفترة.",

@@ -392,14 +392,21 @@ fn LiveSession(session: ActiveSession) -> Element {
     };
 
     let mut remove_set = move |()| {
+        let mut removed = None;
         states.with_mut(|list| {
             if let Some(exercise) = list.get_mut(current_index) {
                 let last = exercise.sets.len().saturating_sub(1);
                 if last > 0 && exercise.sets.get(last).is_some_and(|set| !set.done) {
+                    removed = exercise.sets.get(last).map(|set| (exercise.id, set.number));
                     exercise.sets.remove(last);
                 }
             }
         });
+        if let Some((id, number)) = removed {
+            if let Err(err) = db::remove_session_set(id, number) {
+                dioxus::logger::tracing::error!("remove set failed: {err:#}");
+            }
+        }
         selected.set(None);
     };
 
@@ -1129,6 +1136,7 @@ fn load(session: &ActiveSession, lb: bool, block: Option<Block>) -> Vec<Exercise
                 row.muscle_main.as_deref(),
                 row.logged.len(),
                 row.targets.len(),
+                !row.removed.is_empty(),
                 &mut topped,
             );
             exercise_state(row, lb, session.id, goal, block, extra)
@@ -1142,12 +1150,20 @@ fn extra_set(
     muscle: Option<&str>,
     logged: usize,
     planned: usize,
+    removed: bool,
     topped: &mut Vec<String>,
 ) -> bool {
     let (Some(block), Some(muscle)) = (block, muscle) else {
         return false;
     };
-    if block.deload() || logged > planned || topped.iter().any(|done| done == muscle) {
+    if block.deload() || topped.iter().any(|done| done == muscle) {
+        return false;
+    }
+    if removed {
+        topped.push(muscle.to_string());
+        return false;
+    }
+    if logged > planned {
         return false;
     }
     let done = counts
@@ -1185,6 +1201,7 @@ fn exercise_state(
     if extra {
         numbers.push(numbers.last().copied().unwrap_or(0).saturating_add(1));
     }
+    numbers.retain(|number| !row.removed.contains(number));
     let history = db::exercise_history(row.exercise_id, session_id, 4).unwrap_or_else(|err| {
         dioxus::logger::tracing::error!("exercise history failed: {err:#}");
         Vec::new()

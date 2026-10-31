@@ -2,13 +2,13 @@ use chrono::{Days, Local, NaiveDate, NaiveTime, TimeZone};
 use dioxus::prelude::*;
 
 use crate::{
-    calendar::{volume_text, week_start, CalendarCard},
+    calendar::{week_start, CalendarCard},
     db,
     exercises::ExerciseThumb,
     i18n::{use_i18n, I18n},
     session::ActiveSessionPill,
     shell::Route,
-    ui::{change, display_weight, duration_label, weight_text, weight_unit, Delta, ForwardIcon},
+    ui::{change, duration_label, weight_text, Delta, ForwardIcon},
 };
 
 const SEGMENTS: [&str; 4] = ["bg-mango", "bg-lime", "bg-lilac", "bg-sky"];
@@ -31,8 +31,8 @@ pub fn Overview() -> Element {
     let last_start_at = midnight(last_week);
     let since = today.checked_sub_days(Days::new(90)).unwrap_or(today);
 
-    let volume = quiet(db::volume_between(week_start_at, week_end_at));
-    let last_volume = quiet(db::volume_between(last_start_at, week_start_at));
+    let sets = quiet(db::sets_between(week_start_at, week_end_at));
+    let last_sets = quiet(db::sets_between(last_start_at, week_start_at));
     let seconds = quiet(db::workout_seconds_between(week_start_at, week_end_at));
     let last_seconds = quiet(db::workout_seconds_between(last_start_at, week_start_at));
     let breakdown = groups(
@@ -49,9 +49,9 @@ pub fn Overview() -> Element {
             div { class: "mt-5 grid grid-cols-2 gap-3",
                 Metric {
                     to: Route::VolumeProgress {},
-                    title: i18n.t("overview.volume"),
-                    value: format!("{} {}", volume_text(display_weight(volume, lb)), weight_unit(lb)),
-                    delta: change(volume, last_volume),
+                    title: i18n.t("progress.sets"),
+                    value: sets.to_string(),
+                    delta: change(sets_of(sets), sets_of(last_sets)),
                     tone: "bg-mango",
                 }
                 Metric {
@@ -203,6 +203,10 @@ fn segment(index: usize) -> &'static str {
 
 fn seconds_of(seconds: i64) -> f64 {
     f64::from(i32::try_from(seconds).unwrap_or(i32::MAX))
+}
+
+fn sets_of(sets: i64) -> f64 {
+    f64::from(i32::try_from(sets).unwrap_or(i32::MAX))
 }
 
 fn midnight(day: NaiveDate) -> i64 {

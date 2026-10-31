@@ -315,7 +315,7 @@
   },
   "progress": {
     "all": "All",
-    "totalVolume": "Total Volume",
+    "totalSets": "Total Sets",
     "totalTime": "Total Workout Time",
     "averagePerWeek": "Average per week",
     "nothingLogged": "Nothing logged in this range.",

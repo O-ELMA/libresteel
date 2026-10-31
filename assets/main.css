@@ -18,9 +18,9 @@ body {
     stroke-linecap: round;
 }
 
-.dx-chart-volume .dx-bar,
-.dx-chart-volume .dx-line-path,
-.dx-chart-volume .dx-line-dot {
+.dx-chart-sets .dx-bar,
+.dx-chart-sets .dx-line-path,
+.dx-chart-sets .dx-line-dot {
     stroke: #ff9b61;
 }
 

@@ -4,7 +4,7 @@
 
 A workout planner and tracker that lives entirely on your phone. No account, no server, no internet.
 
-**[Download LibreSteel 0.1.0 (APK)](https://github.com/O-ELMA/libresteel/releases/download/0.1.0/LibreSteel.apk)** for Android. The phone will warn you because it is installed by hand, not from a store. Allow installs from your browser when it asks.
+**[Download LibreSteel 0.2.0 (APK)](https://github.com/O-ELMA/libresteel/releases/download/0.2.0/LibreSteel.apk)** for Android. The phone will warn you because it is installed by hand, not from a store. Allow installs from your browser when it asks.
 
 - **1,269 exercises** to search and filter by muscle, equipment and difficulty.
 - **Routines you build**: days, sets, target reps, rest, supersets.

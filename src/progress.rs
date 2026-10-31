@@ -108,7 +108,7 @@ enum Mode {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Axis {
-    Volume,
+    Sets,
     Time,
 }
 
@@ -150,22 +150,18 @@ pub fn VolumeProgress() -> Element {
     let mut offset = use_signal(|| 0i64);
     let today = Local::now().date_naive();
     let first = quiet(db::first_session_at()).and_then(local_date);
-    let lb = db::unit_lb();
     let selected = range();
     let window = progress_window(selected, today, offset(), first);
     let start_at = window.start_at();
     let end_at = window.end_at();
 
-    let total = display_weight(quiet(db::volume_between(start_at, end_at)), lb);
-    let previous = window.previous().map(|prev| {
-        display_weight(
-            quiet(db::volume_between(prev.start_at(), prev.end_at())),
-            lb,
-        )
-    });
-    let points = quiet(db::volume_sessions_between(start_at, end_at))
+    let total = seconds_of(quiet(db::sets_between(start_at, end_at)));
+    let previous = window
+        .previous()
+        .map(|prev| seconds_of(quiet(db::sets_between(prev.start_at(), prev.end_at()))));
+    let points = quiet(db::sets_sessions_between(start_at, end_at))
         .into_iter()
-        .map(|(epoch, value)| (epoch, display_weight(value, lb)))
+        .map(|(epoch, count)| (epoch, seconds_of(count)))
         .collect::<Vec<_>>();
     let (labels, series) = buckets(&i18n, selected, &points, window);
     let weeks = f64::from(i32::try_from(window.days()).unwrap_or(1).max(1)) / 7.0;
@@ -175,17 +171,17 @@ pub fn VolumeProgress() -> Element {
     rsx! {
         BackHeader {}
         div { class: "px-5 pb-8",
-            div { class: "mt-4 text-sm font-semibold", "{i18n.t(\"progress.totalVolume\")}" }
+            div { class: "mt-4 text-sm font-semibold", "{i18n.t(\"progress.totalSets\")}" }
             div { class: "mt-2 flex items-baseline gap-3",
                 span { class: "text-[40px] font-bold leading-tight tracking-tight text-mango",
-                    "{volume_text(total)} {weight_unit(lb)}"
+                    "{volume_text(total)}"
                 }
                 if let Some(percent) = delta {
                     Delta { percent }
                 }
             }
             if let Some(prev) = previous {
-                Compare { kind: Axis::Volume, total, previous: prev, days: window.days(), range: selected, unit: weight_unit(lb) }
+                Compare { kind: Axis::Sets, total, previous: prev, days: window.days(), range: selected }
             }
             Chips {
                 labels: RANGES.iter().map(|item| item.label(&i18n)).collect::<Vec<_>>(),
@@ -211,11 +207,11 @@ pub fn VolumeProgress() -> Element {
             if points.is_empty() {
                 p { class: "mt-10 text-center text-sm text-muted", "{i18n.t(\"progress.nothingLogged\")}" }
             } else {
-                Bars { series, labels, axis: Axis::Volume }
+                Bars { series, labels, axis: Axis::Sets }
             }
             div { class: "mt-4 flex items-center justify-between rounded-xl bg-tile px-4 py-3",
                 span { class: "text-sm font-semibold", "{i18n.t(\"progress.averagePerWeek\")}" }
-                span { class: "text-[15px] font-bold", "{volume_text(average)} {weight_unit(lb)}" }
+                span { class: "text-[15px] font-bold", "{volume_text(average)}" }
             }
         }
     }
@@ -260,7 +256,7 @@ pub fn TimeProgress() -> Element {
                 }
             }
             if let Some(prev) = previous {
-                Compare { kind: Axis::Time, total: seconds_of(total), previous: seconds_of(prev), days: window.days(), range: selected, unit: "" }
+                Compare { kind: Axis::Time, total: seconds_of(total), previous: seconds_of(prev), days: window.days(), range: selected }
             }
             Chips {
                 labels: RANGES.iter().map(|item| item.label(&i18n)).collect::<Vec<_>>(),
@@ -636,7 +632,6 @@ fn Compare(
     previous: f64,
     days: i64,
     range: Range,
-    unit: &'static str,
 ) -> Element {
     let i18n = use_i18n();
     if previous <= 0.0 || range == Range::All {
@@ -649,7 +644,7 @@ fn Compare(
         i18n.t("progress.decreased")
     };
     let amount = match kind {
-        Axis::Volume => format!("{} {unit}", volume_text(diff.abs())),
+        Axis::Sets => volume_text(diff.abs()),
         Axis::Time => minutes_label(diff.abs() / 60.0),
     };
     let text = i18n.ta(
@@ -669,13 +664,13 @@ fn Compare(
 
 #[component]
 fn Bars(series: Vec<f32>, labels: Vec<String>, axis: Axis) -> Element {
-    let interpolation: fn(f32) -> String = if axis == Axis::Volume {
-        volume_axis
+    let interpolation: fn(f32) -> String = if axis == Axis::Sets {
+        number_axis
     } else {
         time_axis
     };
-    let tone = if axis == Axis::Volume {
-        "dx-chart-volume"
+    let tone = if axis == Axis::Sets {
+        "dx-chart-sets"
     } else {
         "dx-chart-time"
     };
@@ -704,7 +699,7 @@ fn Bars(series: Vec<f32>, labels: Vec<String>, axis: Axis) -> Element {
 
 #[component]
 fn Lines(series: Vec<f32>, labels: Vec<String>) -> Element {
-    let interpolation: fn(f32) -> String = kg_axis;
+    let interpolation: fn(f32) -> String = number_axis;
     rsx! {
         div { class: "mt-4 aspect-[3/2] w-full",
             LineChart {
@@ -942,14 +937,6 @@ fn comparison_days(range: Range) -> i64 {
     range.days().unwrap_or(0)
 }
 
-fn volume_axis(value: f32) -> String {
-    if value >= 1000.0 {
-        format!("{:.0}k", value / 1000.0)
-    } else {
-        format!("{value:.0}")
-    }
-}
-
 fn time_axis(value: f32) -> String {
     let total = value.round();
     if total >= 60.0 {
@@ -965,7 +952,7 @@ fn time_axis(value: f32) -> String {
     }
 }
 
-fn kg_axis(value: f32) -> String {
+fn number_axis(value: f32) -> String {
     format!("{value:.0}")
 }
 

@@ -79,8 +79,8 @@ fn Shell() -> Element {
                 r#"
                 history.pushState({ guard: true }, "");
                 window.addEventListener("popstate", () => {
-                    history.pushState({ guard: true }, "");
                     dioxus.send("back");
+                    setTimeout(() => history.pushState({ guard: true }, ""), 0);
                 });
                 "#,
             );

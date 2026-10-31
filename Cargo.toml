@@ -1,6 +1,6 @@
 [package]
 name = "libresteel"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["O-ELMA <oelmathari@proton.me>"]
 edition = "2021"
 

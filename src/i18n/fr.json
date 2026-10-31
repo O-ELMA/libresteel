@@ -315,7 +315,7 @@
   },
   "progress": {
     "all": "Tout",
-    "totalVolume": "Volume total",
+    "totalSets": "Séries totales",
     "totalTime": "Temps d'entraînement total",
     "averagePerWeek": "Moyenne par semaine",
     "nothingLogged": "Rien d'enregistré sur cette période.",
