@@ -15,7 +15,10 @@ use crate::{
     media,
     shell::Route,
     suggest::{self, Block, Goal},
-    ui::{display_weight, parse_weight, weight_field, weight_unit, BackIcon, DeleteButton},
+    ui::{
+        display_weight, km_text, minutes_text, option_text, parse_weight, set_orm, weight_field,
+        weight_unit, BackIcon, DeleteButton,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -923,7 +926,7 @@ fn CompleteScreen(session: ActiveSession, onback: EventHandler<()>) -> Element {
                                 key: "{set.set_number}",
                                 number: set.set_number,
                                 cells: logged_cells(&exercise.log_type, set, lb),
-                                orm: set_orm(set),
+                                orm: set_orm(set.weight, set.reps),
                                 best: exercise.best_1rm,
                                 lb,
                             }
@@ -1225,14 +1228,14 @@ fn exercise_state(
                 .or_else(|| targets.last());
             let defaults = Inputs {
                 weight: weight_field(target.and_then(|set| set.target_weight), lb),
-                reps: text(target.and_then(|set| set.target_reps)),
+                reps: option_text(target.and_then(|set| set.target_reps)),
                 seconds: minute_text(target.and_then(|set| set.target_seconds), cardio),
                 distance: km_text(target.and_then(|set| set.target_distance_m)),
             };
             let suggested = suggestions.get(index).copied().flatten();
             let inputs = logged.map_or_else(Inputs::default, |set| Inputs {
                 weight: weight_field(set.weight, lb),
-                reps: text(set.reps),
+                reps: option_text(set.reps),
                 seconds: minute_text(set.seconds, cardio),
                 distance: km_text(set.distance_m),
             });
@@ -1294,8 +1297,8 @@ fn logged_cells(log_type: &str, set: &SessionSet, lb: bool) -> Vec<String> {
         .iter()
         .map(|column| match column {
             Column::Weight => weight_field(set.weight, lb),
-            Column::Reps => text(set.reps),
-            Column::Seconds => text(set.seconds),
+            Column::Reps => option_text(set.reps),
+            Column::Seconds => option_text(set.seconds),
             Column::Minutes => set
                 .seconds
                 .map_or_else(String::new, |seconds| (seconds / 60).to_string()),
@@ -1343,15 +1346,6 @@ fn pretty_column(i18n: &I18n, column: Column) -> String {
     }
 }
 
-fn set_orm(set: &SessionSet) -> Option<f64> {
-    let weight = set.weight?;
-    let reps = set.reps?;
-    if weight <= 0.0 || !(1..=30).contains(&reps) {
-        return None;
-    }
-    Some(weight * (1.0 + f64::from(i32::try_from(reps).unwrap_or(0)) / 30.0))
-}
-
 fn values(
     log_type: &str,
     inputs: &Inputs,
@@ -1385,10 +1379,6 @@ fn ready(log_type: &str, inputs: &Inputs) -> bool {
     }
 }
 
-fn text(value: Option<impl std::fmt::Display>) -> String {
-    value.map_or_else(String::new, |value| value.to_string())
-}
-
 fn pick<'a>(value: &'a str, fallback: &'a str) -> &'a str {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -1399,17 +1389,11 @@ fn pick<'a>(value: &'a str, fallback: &'a str) -> &'a str {
 }
 
 fn minute_text(seconds: Option<i64>, cardio: bool) -> String {
-    seconds.map_or_else(String::new, |value| {
-        if cardio {
-            (value / 60).to_string()
-        } else {
-            value.to_string()
-        }
-    })
-}
-
-fn km_text(distance_m: Option<f64>) -> String {
-    distance_m.map_or_else(String::new, |value| (value / 1000.0).to_string())
+    if cardio {
+        minutes_text(seconds)
+    } else {
+        option_text(seconds)
+    }
 }
 
 fn clock(seconds: i64) -> String {

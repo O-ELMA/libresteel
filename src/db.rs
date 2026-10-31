@@ -1,7 +1,7 @@
 use std::{
     fs,
     path::PathBuf,
-    sync::{Mutex, OnceLock, PoisonError},
+    sync::{Mutex, MutexGuard, OnceLock, PoisonError},
 };
 
 use anyhow::{Context, Result};
@@ -13,6 +13,11 @@ use crate::suggest::Block;
 const PREBUILT: &[u8] = include_bytes!("../assets/jefeet.db");
 
 static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
+
+fn connection() -> Result<MutexGuard<'static, Connection>> {
+    let db = DB.get().context("database not initialised")?;
+    Ok(db.lock().unwrap_or_else(PoisonError::into_inner))
+}
 
 pub fn init() -> Result<()> {
     let dir = app_data_dir()?;
@@ -250,8 +255,7 @@ fn localized(conn: &Connection, column: &str) -> String {
 }
 
 pub fn group_counts() -> Result<Vec<(String, i64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT muscle_main, COUNT(*) FROM exercise
          WHERE muscle_main IS NOT NULL
@@ -287,8 +291,7 @@ pub struct ExerciseDetail {
 }
 
 pub fn exercises() -> Result<Vec<Exercise>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name = localized(&conn, "name");
     let mut stmt = conn.prepare(&format!(
         "SELECT id, {name},
@@ -314,8 +317,7 @@ pub fn exercises() -> Result<Vec<Exercise>> {
 }
 
 pub fn exercise(id: i64) -> Result<Option<ExerciseDetail>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name = localized(&conn, "name");
     let description = localized(&conn, "description");
     let mut stmt = conn.prepare(&format!(
@@ -368,8 +370,7 @@ pub fn json_list(raw: &str) -> Vec<&str> {
 }
 
 pub fn with_connection<T>(f: impl FnOnce(&mut Connection) -> Result<T>) -> Result<T> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     f(&mut conn)
 }
 
@@ -393,8 +394,7 @@ pub fn unit_lb() -> bool {
 }
 
 pub fn set_unit(lb: bool) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE user_setting SET unit = ?1 WHERE id = 1",
         [if lb { "lb" } else { "kg" }],
@@ -404,8 +404,7 @@ pub fn set_unit(lb: bool) -> Result<()> {
 }
 
 pub fn set_display_name(value: &str) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE user_setting SET display_name = NULLIF(TRIM(?1), '') WHERE id = 1",
         [value],
@@ -428,8 +427,7 @@ pub fn onboarded() -> bool {
 }
 
 pub fn finish_onboarding() -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("UPDATE user_setting SET onboarded = 1 WHERE id = 1", [])?;
     drop(conn);
     Ok(())
@@ -449,8 +447,7 @@ pub fn first_week_day() -> u32 {
 }
 
 pub fn set_first_week_day(value: u32) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE user_setting SET first_week_day = ?1 WHERE id = 1",
         [i64::from(value % 7)],
@@ -477,8 +474,7 @@ pub fn default_rest() -> i64 {
 }
 
 pub fn set_default_rest(seconds: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE user_setting SET rest_seconds = ?1 WHERE id = 1",
         [seconds.max(0)],
@@ -501,8 +497,7 @@ pub fn language() -> String {
 }
 
 pub fn set_language(language: &str) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE user_setting SET language = ?1 WHERE id = 1",
         [language],
@@ -523,8 +518,7 @@ pub fn gender() -> Option<String> {
 }
 
 pub fn set_gender(value: &str) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("UPDATE user_setting SET gender = ?1 WHERE id = 1", [value])?;
     drop(conn);
     Ok(())
@@ -541,8 +535,7 @@ pub fn dob() -> Option<i64> {
 }
 
 pub fn set_dob(value: Option<i64>) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("UPDATE user_setting SET dob = ?1 WHERE id = 1", [value])?;
     drop(conn);
     Ok(())
@@ -568,8 +561,7 @@ fn body_column(field: &str) -> Result<&'static str> {
 
 pub fn body_latest(field: &str) -> Result<Option<(i64, f64)>> {
     let column = body_column(field)?;
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     Ok(conn
         .query_row(
             &format!(
@@ -586,8 +578,7 @@ pub fn body_latest(field: &str) -> Result<Option<(i64, f64)>> {
 
 pub fn save_body(field: &str, value: f64) -> Result<()> {
     let column = body_column(field)?;
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         &format!("INSERT INTO measurement (recorded_at, {column}) VALUES (?1, ?2)"),
         params![now(), value],
@@ -604,8 +595,7 @@ pub fn save_measurement(
     if weight_kg.is_none() && fat_percent.is_none() && height_cm.is_none() {
         return Ok(());
     }
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "INSERT INTO measurement (recorded_at, weight_kg, fat_percent, height_cm)
          VALUES (?1, ?2, ?3, ?4)",
@@ -629,8 +619,7 @@ pub struct Routine {
 }
 
 pub fn routines() -> Result<Vec<Routine>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT p.id, p.name, p.level, p.goal, p.split, p.block_weeks, p.block_enabled,
                 p.is_active, (SELECT COUNT(*) FROM plan_day d WHERE d.plan_id = p.id)
@@ -659,8 +648,7 @@ pub fn routine_goal(routine_id: Option<i64>) -> Result<Option<String>> {
     let Some(routine_id) = routine_id else {
         return Ok(None);
     };
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let goal = conn
         .query_row("SELECT goal FROM plan WHERE id = ?1", [routine_id], |row| {
             row.get::<_, Option<String>>(0)
@@ -675,8 +663,7 @@ pub fn routine_block(routine_id: Option<i64>, session_start: i64) -> Result<Opti
     let Some(routine_id) = routine_id else {
         return Ok(None);
     };
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let Some((weeks, started, enabled, days)) = conn
         .query_row(
             "SELECT p.block_weeks, p.block_started_at, p.block_enabled,
@@ -768,8 +755,7 @@ pub fn create_routine(
     block_enabled: bool,
     seeds: &[DaySeed],
 ) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     tx.execute(
         "INSERT INTO plan (name, level, goal, split, block_weeks, block_enabled, is_active, created_at)
@@ -811,8 +797,7 @@ pub fn update_routine(
     block_weeks: i64,
     block_enabled: bool,
 ) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE plan SET name = ?1, level = ?2, goal = ?3, split = ?4, block_weeks = ?5,
                 block_enabled = ?6 WHERE id = ?7",
@@ -831,8 +816,7 @@ pub fn update_routine(
 }
 
 pub fn select_routine(id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     tx.execute("UPDATE plan SET is_active = 0", [])?;
     tx.execute("UPDATE plan SET is_active = 1 WHERE id = ?1", [id])?;
@@ -842,16 +826,14 @@ pub fn select_routine(id: i64) -> Result<()> {
 }
 
 pub fn delete_routine(id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("DELETE FROM plan WHERE id = ?1", [id])?;
     drop(conn);
     Ok(())
 }
 
 pub fn clone_routine(id: i64, name: &str) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     tx.execute(
         "INSERT INTO plan
@@ -894,8 +876,7 @@ pub struct RoutineDay {
 }
 
 fn select_days(filter: &str, key: i64) -> Result<Vec<RoutineDay>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let sql = format!(
         "SELECT d.id, d.plan_id, d.name, d.weekday,
                 (SELECT COUNT(*) FROM plan_exercise pe WHERE pe.plan_day_id = d.id),
@@ -934,8 +915,7 @@ pub fn days(routine_id: i64) -> Result<Vec<RoutineDay>> {
 }
 
 pub fn add_day(routine_id: i64, name: &str, weekday: Option<i64>) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "INSERT INTO plan_day (plan_id, name, weekday, order_index)
          VALUES (?1, ?2, ?3,
@@ -948,8 +928,7 @@ pub fn add_day(routine_id: i64, name: &str, weekday: Option<i64>) -> Result<i64>
 }
 
 pub fn clone_day(day_id: i64, routine_id: i64, name: &str) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     let weekday = tx
         .query_row(
@@ -998,8 +977,7 @@ fn copy_day_exercises(conn: &Connection, source: i64, target: i64) -> Result<()>
 }
 
 pub fn update_day(id: i64, name: &str, weekday: Option<i64>) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE plan_day SET name = ?1, weekday = ?2 WHERE id = ?3",
         params![name, weekday, id],
@@ -1009,16 +987,14 @@ pub fn update_day(id: i64, name: &str, weekday: Option<i64>) -> Result<()> {
 }
 
 pub fn delete_day(id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("DELETE FROM plan_day WHERE id = ?1", [id])?;
     drop(conn);
     Ok(())
 }
 
 pub fn set_day_order(routine_id: i64, ids: &[i64], split: &str) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     write_day_order(&tx, routine_id, ids, split, split)?;
     tx.commit()?;
@@ -1027,8 +1003,7 @@ pub fn set_day_order(routine_id: i64, ids: &[i64], split: &str) -> Result<()> {
 }
 
 pub fn renumber_days(routine_id: i64, old_split: &str, new_split: &str) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     let mut stmt = tx.prepare("SELECT id FROM plan_day WHERE plan_id = ?1 ORDER BY order_index")?;
     let rows = stmt.query_map([routine_id], |row| row.get::<_, i64>(0))?;
@@ -1117,8 +1092,7 @@ pub struct RoutineExercise {
 }
 
 pub fn day_exercises(day_id: i64) -> Result<Vec<RoutineExercise>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name = localized(&conn, "e.name");
     let mut stmt = conn.prepare(&format!(
         "SELECT pe.id, e.id, {name}, e.muscle_main, e.log_type, pe.rest_seconds, pe.superset_group
@@ -1171,8 +1145,7 @@ pub fn day_exercises(day_id: i64) -> Result<Vec<RoutineExercise>> {
 }
 
 pub fn add_exercises(day_id: i64, exercise_ids: &[i64]) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     for exercise_id in exercise_ids {
         insert_exercise(&tx, day_id, *exercise_id)?;
@@ -1220,8 +1193,7 @@ fn insert_exercise(conn: &Connection, day_id: i64, exercise_id: i64) -> Result<i
 }
 
 pub fn clone_exercise(plan_exercise_id: i64) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     tx.execute(
         "INSERT INTO plan_exercise (plan_day_id, exercise_id, order_index, rest_seconds)
@@ -1246,8 +1218,7 @@ pub fn clone_exercise(plan_exercise_id: i64) -> Result<i64> {
 }
 
 pub fn replace_exercise(plan_exercise_id: i64, exercise_id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE plan_exercise SET exercise_id = ?2 WHERE id = ?1",
         params![plan_exercise_id, exercise_id],
@@ -1265,8 +1236,7 @@ pub fn routine_muscle_counts(routine_id: i64) -> Result<Vec<(String, i64, i64)>>
 }
 
 fn muscle_counts(filter: &str, key: i64) -> Result<Vec<(String, i64, i64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(&format!(
         "SELECT e.muscle_main, COUNT(DISTINCT pe.id), COUNT(ps.id)
          FROM plan_day d
@@ -1284,8 +1254,7 @@ fn muscle_counts(filter: &str, key: i64) -> Result<Vec<(String, i64, i64)>> {
 }
 
 pub fn set_exercise_order(day_id: i64, ids: &[i64]) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     for (index, id) in ids.iter().enumerate() {
         tx.execute(
@@ -1299,8 +1268,7 @@ pub fn set_exercise_order(day_id: i64, ids: &[i64]) -> Result<()> {
 }
 
 pub fn remove_exercise(plan_exercise_id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let day_id = conn
         .query_row(
             "SELECT plan_day_id FROM plan_exercise WHERE id = ?1",
@@ -1320,8 +1288,7 @@ pub fn remove_exercise(plan_exercise_id: i64) -> Result<()> {
 }
 
 pub fn set_day_supersets(day_id: i64, groups: &[Vec<i64>]) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     tx.execute(
         "UPDATE plan_exercise SET superset_group = NULL WHERE plan_day_id = ?1",
@@ -1358,8 +1325,7 @@ fn clear_singleton_supersets(conn: &Connection, day_id: i64) -> Result<()> {
 }
 
 pub fn set_rest(plan_exercise_id: i64, seconds: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE plan_exercise SET rest_seconds = ?1 WHERE id = ?2",
         params![seconds.max(0), plan_exercise_id],
@@ -1369,8 +1335,7 @@ pub fn set_rest(plan_exercise_id: i64, seconds: i64) -> Result<()> {
 }
 
 pub fn add_set(plan_exercise_id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let copied = conn.execute(
         "INSERT INTO plan_set
              (plan_exercise_id, set_number, target_weight, target_reps, target_seconds, target_distance_m)
@@ -1389,8 +1354,7 @@ pub fn add_set(plan_exercise_id: i64) -> Result<()> {
 }
 
 pub fn remove_set(plan_exercise_id: i64, set_number: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     let tx = conn.transaction()?;
     let deleted = tx.execute(
         "DELETE FROM plan_set WHERE plan_exercise_id = ?1 AND set_number = ?2",
@@ -1427,8 +1391,7 @@ pub fn update_set(
     seconds: Option<i64>,
     distance_m: Option<f64>,
 ) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE plan_set
          SET target_weight = ?3, target_reps = ?4, target_seconds = ?5, target_distance_m = ?6
@@ -1510,8 +1473,7 @@ fn session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ActiveSession> {
 }
 
 pub fn active_session() -> Result<Option<ActiveSession>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let session = conn
         .query_row(
             "SELECT id, plan_id, plan_day_id, COALESCE(name, ''), started_at, NULL, rest_until
@@ -1525,8 +1487,7 @@ pub fn active_session() -> Result<Option<ActiveSession>> {
 }
 
 pub fn finished_sessions() -> Result<Vec<ActiveSession>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT id, plan_id, plan_day_id, COALESCE(name, ''), started_at, ended_at, rest_until
          FROM session WHERE ended_at IS NOT NULL ORDER BY started_at DESC",
@@ -1539,8 +1500,7 @@ pub fn finished_sessions() -> Result<Vec<ActiveSession>> {
 }
 
 pub fn sets_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT sn.started_at, COUNT(*)
          FROM session_set s
@@ -1558,8 +1518,7 @@ pub fn sets_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>> {
 }
 
 pub fn sets_between(start: i64, end: i64) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let count = conn.query_row(
         "SELECT COUNT(*)
          FROM session_set s
@@ -1575,8 +1534,7 @@ pub fn sets_between(start: i64, end: i64) -> Result<i64> {
 }
 
 pub fn workout_seconds_between(start: i64, end: i64) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let seconds = conn.query_row(
         "SELECT COALESCE(SUM(ended_at - started_at), 0)
          FROM session
@@ -1591,8 +1549,7 @@ pub fn workout_seconds_between(start: i64, end: i64) -> Result<i64> {
 }
 
 pub fn muscle_sets_between(start: i64, end: i64) -> Result<Vec<(String, i64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT e.muscle_main, COUNT(*)
          FROM session_set s
@@ -1612,8 +1569,7 @@ pub fn muscle_sets_between(start: i64, end: i64) -> Result<Vec<(String, i64)>> {
 }
 
 pub fn best_1rm_since(since: i64) -> Result<Vec<(i64, String, f64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name = localized(&conn, "e.name");
     let mut stmt = conn.prepare(&format!(
         "SELECT se.exercise_id, {name}, MAX(s.weight * (1.0 + s.reps / 30.0))
@@ -1634,16 +1590,14 @@ pub fn best_1rm_since(since: i64) -> Result<Vec<(i64, String, f64)>> {
 }
 
 pub fn first_session_at() -> Result<Option<i64>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let first = conn.query_row("SELECT MIN(started_at) FROM session", [], |row| row.get(0))?;
     drop(conn);
     Ok(first)
 }
 
 pub fn workout_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT started_at, ended_at - started_at
          FROM session
@@ -1659,8 +1613,7 @@ pub fn workout_sessions_between(start: i64, end: i64) -> Result<Vec<(i64, i64)>>
 }
 
 pub fn exercise_name(id: i64) -> Result<Option<String>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name_col = localized(&conn, "name");
     let name = conn
         .query_row(
@@ -1678,8 +1631,7 @@ pub fn exercise_history(
     skip_session: i64,
     limit: i64,
 ) -> Result<Vec<HistorySession>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT sn.id, sn.started_at, s.set_number, s.weight, s.reps, s.seconds, s.distance_m
          FROM session_set s
@@ -1731,8 +1683,7 @@ pub fn exercise_history(
 }
 
 pub fn exercise_1rm_sessions(exercise_id: i64, start: i64, end: i64) -> Result<Vec<(i64, f64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT sn.started_at, MAX(s.weight * (1.0 + s.reps / 30.0))
          FROM session_set s
@@ -1752,8 +1703,7 @@ pub fn exercise_1rm_sessions(exercise_id: i64, start: i64, end: i64) -> Result<V
 }
 
 pub fn exercise_volume_sessions(exercise_id: i64, start: i64, end: i64) -> Result<Vec<(i64, f64)>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let mut stmt = conn.prepare(
         "SELECT sn.started_at, SUM(s.weight * s.reps)
          FROM session_set s
@@ -1773,8 +1723,7 @@ pub fn exercise_volume_sessions(exercise_id: i64, start: i64, end: i64) -> Resul
 }
 
 pub fn start_session(day_id: i64) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let mut conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut conn = connection()?;
     if let Some(id) = active_id(&conn)? {
         return Ok(id);
     }
@@ -1827,8 +1776,7 @@ fn session_exercises_inner(
     session: &ActiveSession,
     finished_only: bool,
 ) -> Result<Vec<SessionExercise>> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let name = localized(&conn, "e.name");
     let mut stmt = conn.prepare(&format!(
         "SELECT se.id, se.exercise_id, COALESCE({name}, se.name), e.muscle_main, e.log_type,
@@ -1945,8 +1893,7 @@ pub fn current_position(rows: &[SessionExercise]) -> usize {
 }
 
 pub fn session_set_count(session_id: i64) -> Result<i64> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     let count = conn.query_row(
         "SELECT COUNT(*) FROM session_set s
          JOIN session_exercise se ON se.id = s.session_exercise_id
@@ -1966,8 +1913,7 @@ pub fn log_set(
     seconds: Option<i64>,
     distance_m: Option<f64>,
 ) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "INSERT INTO session_set
              (session_exercise_id, set_number, weight, reps, seconds, distance_m, completed_at)
@@ -1995,8 +1941,7 @@ pub fn log_set(
 }
 
 pub fn remove_session_set(session_exercise_id: i64, set_number: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "DELETE FROM session_set WHERE session_exercise_id = ?1 AND set_number = ?2",
         params![session_exercise_id, set_number],
@@ -2031,8 +1976,7 @@ pub fn finish_session(session_id: i64) -> Result<()> {
     if session_set_count(session_id)? == 0 {
         return discard_session(session_id);
     }
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE session SET ended_at = ?2, rest_until = NULL WHERE id = ?1 AND ended_at IS NULL",
         params![session_id, now()],
@@ -2042,8 +1986,7 @@ pub fn finish_session(session_id: i64) -> Result<()> {
 }
 
 pub fn set_rest_until(session_id: i64, deadline: Option<i64>) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute(
         "UPDATE session SET rest_until = ?2 WHERE id = ?1 AND ended_at IS NULL",
         params![session_id, deadline],
@@ -2053,8 +1996,7 @@ pub fn set_rest_until(session_id: i64, deadline: Option<i64>) -> Result<()> {
 }
 
 pub fn discard_session(session_id: i64) -> Result<()> {
-    let db = DB.get().context("database not initialised")?;
-    let conn = db.lock().unwrap_or_else(PoisonError::into_inner);
+    let conn = connection()?;
     conn.execute("DELETE FROM session WHERE id = ?1", [session_id])?;
     drop(conn);
     Ok(())

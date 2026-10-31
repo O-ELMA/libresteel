@@ -31,6 +31,14 @@ const KCAL_PER_KG: f64 = 3500.0 * LB_PER_KG;
 
 const FORMULAS: [&str; 3] = ["mifflin", "katch", "cunningham"];
 
+#[derive(Clone, PartialEq)]
+struct PickerOption {
+    key: &'static str,
+    label: String,
+    note: Option<String>,
+    trailing: Option<String>,
+}
+
 #[component]
 pub fn BodyEnergy() -> Element {
     let i18n = use_i18n();
@@ -280,60 +288,79 @@ pub fn BodyEnergy() -> Element {
             }
         }
         if picking() {
-            Sheet {
+            PickerSheet {
+                title: i18n.t("energy.activity"),
+                options: ACTIVITIES
+                    .iter()
+                    .map(|(key, factor)| PickerOption {
+                        key,
+                        label: level_label(&i18n, key),
+                        note: None,
+                        trailing: Some(format!("{factor:.3}")),
+                    })
+                    .collect(),
+                selected: activity(),
                 closing: picking_closing(),
                 onclose: close_picking,
-                h3 { class: "px-3 pb-1 text-base font-semibold", "{i18n.t(\"energy.activity\")}" }
-                div { class: "max-h-[65dvh] overflow-y-auto p-1.5",
-                    for (index, (key, factor)) in ACTIVITIES.iter().enumerate() {
-                        button {
-                            key: "{key}",
-                            class: if activity() == index {
-                                "flex w-full items-center gap-3 rounded-xl bg-tile px-3 py-3 text-start"
-                            } else {
-                                "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start"
-                            },
-                            onclick: move |_| {
-                                activity.set(index);
-                                close_picking.call(());
-                            },
-                            div { class: "min-w-0 flex-1",
-                                div { class: "text-[15px] font-medium",
-                                    "{level_label(&i18n, key)}"
-                                }
-                            }
-                            span { class: "shrink-0 text-sm text-muted", "{factor:.3}" }
-                        }
-                    }
-                }
+                onpick: move |index| activity.set(index),
             }
         }
         if picking_formula() {
-            Sheet {
+            PickerSheet {
+                title: i18n.t("energy.formula"),
+                options: FORMULAS
+                    .iter()
+                    .map(|key| PickerOption {
+                        key,
+                        label: formula_label(&i18n, key),
+                        note: Some(formula_note(&i18n, key)),
+                        trailing: None,
+                    })
+                    .collect(),
+                selected: formula(),
                 closing: formula_closing(),
                 onclose: close_formula,
-                h3 { class: "px-3 pb-1 text-base font-semibold", "{i18n.t(\"energy.formula\")}" }
-                div { class: "max-h-[65dvh] overflow-y-auto p-1.5",
-                    for (index, key) in FORMULAS.iter().enumerate() {
-                        button {
-                            key: "{key}",
-                            class: if formula() == index {
-                                "flex w-full items-center gap-3 rounded-xl bg-tile px-3 py-3 text-start"
-                            } else {
-                                "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start"
-                            },
-                            onclick: move |_| {
-                                formula.set(index);
-                                close_formula.call(());
-                            },
-                            div { class: "min-w-0 flex-1",
-                                div { class: "text-[15px] font-medium",
-                                    "{formula_label(&i18n, key)}"
-                                }
-                                div { class: "mt-0.5 text-xs text-muted",
-                                    "{formula_note(&i18n, key)}"
-                                }
+                onpick: move |index| formula.set(index),
+            }
+        }
+    }
+}
+
+#[component]
+fn PickerSheet(
+    title: String,
+    options: Vec<PickerOption>,
+    selected: usize,
+    closing: bool,
+    onclose: EventHandler<()>,
+    onpick: EventHandler<usize>,
+) -> Element {
+    rsx! {
+        Sheet {
+            closing,
+            onclose,
+            h3 { class: "px-3 pb-1 text-base font-semibold", "{title}" }
+            div { class: "max-h-[65dvh] overflow-y-auto p-1.5",
+                for (index, option) in options.iter().enumerate() {
+                    button {
+                        key: "{option.key}",
+                        class: if index == selected {
+                            "flex w-full items-center gap-3 rounded-xl bg-tile px-3 py-3 text-start"
+                        } else {
+                            "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start"
+                        },
+                        onclick: move |_| {
+                            onpick.call(index);
+                            onclose.call(());
+                        },
+                        div { class: "min-w-0 flex-1",
+                            div { class: "text-[15px] font-medium", "{option.label}" }
+                            if let Some(note) = option.note.as_ref() {
+                                div { class: "mt-0.5 text-xs text-muted", "{note}" }
                             }
+                        }
+                        if let Some(trailing) = option.trailing.as_ref() {
+                            span { class: "shrink-0 text-sm text-muted", "{trailing}" }
                         }
                     }
                 }

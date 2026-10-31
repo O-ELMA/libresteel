@@ -458,10 +458,10 @@ fn settings_row(settings: &Settings) -> Vec<String> {
         optional(settings.gender.as_deref()),
         date_or_empty(settings.dob),
         optional(settings.unit.as_deref()),
-        integer_or_empty(settings.rest_seconds),
-        integer_or_empty(settings.default_sets),
-        integer_or_empty(settings.target_reps),
-        integer_or_empty(settings.first_week_day),
+        or_empty(settings.rest_seconds),
+        or_empty(settings.default_sets),
+        or_empty(settings.target_reps),
+        or_empty(settings.first_week_day),
         optional(settings.language.as_deref()),
     ]
 }
@@ -469,18 +469,18 @@ fn settings_row(settings: &Settings) -> Vec<String> {
 fn measurement_row(measurement: &Measurement) -> Vec<String> {
     vec![
         time_or_empty(Some(measurement.recorded_at)),
-        number_or_empty(measurement.weight_kg),
-        number_or_empty(measurement.fat_percent),
-        number_or_empty(measurement.height_cm),
-        number_or_empty(measurement.chest_cm),
-        number_or_empty(measurement.arms_cm),
-        number_or_empty(measurement.waist_cm),
-        number_or_empty(measurement.calves_cm),
-        number_or_empty(measurement.hips_cm),
-        number_or_empty(measurement.thighs_cm),
-        number_or_empty(measurement.shoulders_cm),
-        number_or_empty(measurement.neck_cm),
-        number_or_empty(measurement.forearms_cm),
+        or_empty(measurement.weight_kg),
+        or_empty(measurement.fat_percent),
+        or_empty(measurement.height_cm),
+        or_empty(measurement.chest_cm),
+        or_empty(measurement.arms_cm),
+        or_empty(measurement.waist_cm),
+        or_empty(measurement.calves_cm),
+        or_empty(measurement.hips_cm),
+        or_empty(measurement.thighs_cm),
+        or_empty(measurement.shoulders_cm),
+        or_empty(measurement.neck_cm),
+        or_empty(measurement.forearms_cm),
     ]
 }
 
@@ -502,7 +502,7 @@ fn plan_day_row(plan: &str, day: &PlanDay) -> Vec<String> {
     vec![
         plan.to_string(),
         day.name.clone(),
-        integer_or_empty(day.weekday),
+        or_empty(day.weekday),
         day.order.to_string(),
     ]
 }
@@ -515,7 +515,7 @@ fn plan_exercise_row(plan: &str, day: &str, exercise: &PlanExercise) -> Vec<Stri
         exercise.exercise_name.clone(),
         exercise.exercise_id.to_string(),
         exercise.rest_seconds.to_string(),
-        integer_or_empty(exercise.superset),
+        or_empty(exercise.superset),
     ]
 }
 
@@ -525,10 +525,10 @@ fn plan_set_row(plan: &str, day: &str, exercise: &PlanExercise, set: &SetTargets
         day.to_string(),
         exercise.order.to_string(),
         set.set_number.to_string(),
-        number_or_empty(set.weight),
-        integer_or_empty(set.reps),
-        integer_or_empty(set.seconds),
-        number_or_empty(set.distance_m),
+        or_empty(set.weight),
+        or_empty(set.reps),
+        or_empty(set.seconds),
+        or_empty(set.distance_m),
     ]
 }
 
@@ -548,7 +548,7 @@ fn workout_exercise_row(workout: &Workout, exercise: &WorkoutExercise) -> Vec<St
         exercise.order.to_string(),
         exercise.exercise_name.clone(),
         exercise.exercise_id.to_string(),
-        integer_or_empty(exercise.superset),
+        or_empty(exercise.superset),
     ]
 }
 
@@ -557,10 +557,10 @@ fn workout_set_row(workout: &Workout, exercise: &WorkoutExercise, set: &LoggedSe
         time_or_empty(Some(workout.started_at)),
         exercise.order.to_string(),
         set.set_number.to_string(),
-        number_or_empty(set.weight),
-        integer_or_empty(set.reps),
-        integer_or_empty(set.seconds),
-        number_or_empty(set.distance_m),
+        or_empty(set.weight),
+        or_empty(set.reps),
+        or_empty(set.seconds),
+        or_empty(set.distance_m),
         time_or_empty(Some(set.completed_at)),
     ]
 }
@@ -573,12 +573,8 @@ fn boolean(value: bool) -> String {
     if value { "1" } else { "0" }.to_string()
 }
 
-fn number_or_empty(value: Option<f64>) -> String {
-    value.map_or_else(String::new, |number| number.to_string())
-}
-
-fn integer_or_empty(value: Option<i64>) -> String {
-    value.map_or_else(String::new, |number| number.to_string())
+fn or_empty(value: Option<impl std::fmt::Display>) -> String {
+    value.map_or_else(String::new, |value| value.to_string())
 }
 
 fn time_or_empty(value: Option<i64>) -> String {
@@ -1062,6 +1058,34 @@ fn push_problem(problems: &mut Vec<String>, line: usize, message: impl std::fmt:
     }
 }
 
+fn each_row(
+    table: Option<&Table>,
+    problems: &mut Vec<String>,
+    mut parse: impl FnMut(&Table, &[String]) -> Result<()>,
+) {
+    let Some(table) = table else {
+        return;
+    };
+    for (line, row) in &table.rows {
+        if let Err(error) = parse(table, row) {
+            push_problem(problems, *line, error);
+        }
+    }
+}
+
+fn collect_rows<T>(
+    table: Option<&Table>,
+    problems: &mut Vec<String>,
+    mut parse: impl FnMut(&Table, &[String]) -> Result<T>,
+) -> Vec<T> {
+    let mut items = Vec::new();
+    each_row(table, problems, |table, row| {
+        items.push(parse(table, row)?);
+        Ok(())
+    });
+    items
+}
+
 fn parse_settings(table: Option<&Table>, problems: &mut Vec<String>) -> Option<Settings> {
     let table = table?;
     if table.rows.len() > 1 {
@@ -1121,17 +1145,7 @@ fn parse_settings_row(table: &Table, row: &[String]) -> Result<Settings> {
 }
 
 fn parse_measurements(table: Option<&Table>, problems: &mut Vec<String>) -> Vec<Measurement> {
-    let Some(table) = table else {
-        return Vec::new();
-    };
-    let mut measurements = Vec::new();
-    for (line, row) in &table.rows {
-        match parse_measurement_row(table, row) {
-            Ok(measurement) => measurements.push(measurement),
-            Err(error) => push_problem(problems, *line, error),
-        }
-    }
-    measurements
+    collect_rows(table, problems, parse_measurement_row)
 }
 
 fn parse_measurement_row(table: &Table, row: &[String]) -> Result<Measurement> {
@@ -1242,14 +1256,9 @@ fn parse_plan_row(table: &Table, row: &[String]) -> Result<Plan> {
 }
 
 fn parse_plan_days(table: Option<&Table>, plans: &mut [Plan], problems: &mut Vec<String>) {
-    let Some(table) = table else {
-        return;
-    };
-    for (line, row) in &table.rows {
-        if let Err(error) = parse_plan_day_row(table, row, plans) {
-            push_problem(problems, *line, error);
-        }
-    }
+    each_row(table, problems, |table, row| {
+        parse_plan_day_row(table, row, plans)
+    });
 }
 
 fn parse_plan_day_row(table: &Table, row: &[String], plans: &mut [Plan]) -> Result<()> {
@@ -1295,14 +1304,9 @@ fn parse_plan_exercises(
     plans: &mut [Plan],
     problems: &mut Vec<String>,
 ) {
-    let Some(table) = table else {
-        return;
-    };
-    for (line, row) in &table.rows {
-        if let Err(error) = parse_plan_exercise_row(table, row, catalog, default_rest, plans) {
-            push_problem(problems, *line, error);
-        }
-    }
+    each_row(table, problems, |table, row| {
+        parse_plan_exercise_row(table, row, catalog, default_rest, plans)
+    });
 }
 
 fn parse_plan_exercise_row(
@@ -1354,14 +1358,9 @@ fn parse_plan_exercise_row(
 }
 
 fn parse_plan_sets(table: Option<&Table>, plans: &mut [Plan], problems: &mut Vec<String>) {
-    let Some(table) = table else {
-        return;
-    };
-    for (line, row) in &table.rows {
-        if let Err(error) = parse_plan_set_row(table, row, plans) {
-            push_problem(problems, *line, error);
-        }
-    }
+    each_row(table, problems, |table, row| {
+        parse_plan_set_row(table, row, plans)
+    });
 }
 
 fn parse_plan_set_row(table: &Table, row: &[String], plans: &mut [Plan]) -> Result<()> {
@@ -1498,14 +1497,9 @@ fn parse_workout_exercises(
     workouts: &mut [Workout],
     problems: &mut Vec<String>,
 ) {
-    let Some(table) = table else {
-        return;
-    };
-    for (line, row) in &table.rows {
-        if let Err(error) = parse_workout_exercise_row(table, row, catalog, workouts) {
-            push_problem(problems, *line, error);
-        }
-    }
+    each_row(table, problems, |table, row| {
+        parse_workout_exercise_row(table, row, catalog, workouts)
+    });
 }
 
 fn parse_workout_exercise_row(
@@ -1553,14 +1547,9 @@ fn parse_workout_exercise_row(
 }
 
 fn parse_workout_sets(table: Option<&Table>, workouts: &mut [Workout], problems: &mut Vec<String>) {
-    let Some(table) = table else {
-        return;
-    };
-    for (line, row) in &table.rows {
-        if let Err(error) = parse_workout_set_row(table, row, workouts) {
-            push_problem(problems, *line, error);
-        }
-    }
+    each_row(table, problems, |table, row| {
+        parse_workout_set_row(table, row, workouts)
+    });
 }
 
 fn parse_workout_set_row(table: &Table, row: &[String], workouts: &mut [Workout]) -> Result<()> {

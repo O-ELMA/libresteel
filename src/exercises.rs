@@ -1,4 +1,3 @@
-use chrono::{Datelike, Local, TimeZone};
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::ld_icons::{
@@ -8,12 +7,16 @@ use dioxus_free_icons::{
 };
 
 use crate::{
+    calendar::{local_date, long_date},
     db,
     i18n::{use_i18n, I18n},
     media,
     progress::RmContent,
     shell::Route,
-    ui::{display_weight, trim, use_exit, weight_field, weight_unit, BackIcon, Sheet},
+    ui::{
+        display_weight, option_text, set_orm, trim, use_exit, weight_field, weight_unit, BackIcon,
+        Sheet,
+    },
 };
 
 struct Group {
@@ -663,31 +666,7 @@ fn history_value(i18n: &I18n, log_type: &str, set: &db::HistorySet, lb: bool) ->
 }
 
 fn history_date(i18n: &I18n, epoch: i64) -> String {
-    Local
-        .timestamp_opt(epoch, 0)
-        .single()
-        .map_or_else(String::new, |moment| {
-            let date = moment.date_naive();
-            format!(
-                "{} {}, {}",
-                i18n.month_short(date.month()),
-                date.day(),
-                date.year()
-            )
-        })
-}
-
-fn set_orm(weight: Option<f64>, reps: Option<i64>) -> Option<f64> {
-    let weight = weight?;
-    let reps = reps?;
-    if weight <= 0.0 || !(1..=30).contains(&reps) {
-        return None;
-    }
-    Some(weight * (1.0 + f64::from(i32::try_from(reps).unwrap_or(0)) / 30.0))
-}
-
-fn option_text(value: Option<impl std::fmt::Display>) -> String {
-    value.map_or_else(String::new, |value| value.to_string())
+    local_date(epoch).map_or_else(String::new, |date| long_date(i18n, date))
 }
 
 #[component]

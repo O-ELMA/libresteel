@@ -1,14 +1,14 @@
-use chrono::{Days, Local, NaiveDate, NaiveTime, TimeZone};
+use chrono::{Days, Local};
 use dioxus::prelude::*;
 
 use crate::{
-    calendar::{week_start, CalendarCard},
+    calendar::{midnight, week_start, CalendarCard},
     db,
     exercises::ExerciseThumb,
     i18n::{use_i18n, I18n},
     session::ActiveSessionPill,
     shell::Route,
-    ui::{change, duration_label, weight_text, Delta, ForwardIcon},
+    ui::{change, duration_label, to_f64, weight_text, Delta, ForwardIcon},
 };
 
 const SEGMENTS: [&str; 4] = ["bg-mango", "bg-lime", "bg-lilac", "bg-sky"];
@@ -51,14 +51,14 @@ pub fn Overview() -> Element {
                     to: Route::VolumeProgress {},
                     title: i18n.t("progress.sets"),
                     value: sets.to_string(),
-                    delta: change(sets_of(sets), sets_of(last_sets)),
+                    delta: change(to_f64(sets), to_f64(last_sets)),
                     tone: "bg-mango",
                 }
                 Metric {
                     to: Route::TimeProgress {},
                     title: i18n.t("overview.workoutTime"),
                     value: duration_label(seconds),
-                    delta: change(seconds_of(seconds), seconds_of(last_seconds)),
+                    delta: change(to_f64(seconds), to_f64(last_seconds)),
                     tone: "bg-sky",
                 }
             }
@@ -199,19 +199,4 @@ fn groups(mut rows: Vec<(String, i64)>, i18n: &I18n) -> Vec<(String, i64)> {
 
 fn segment(index: usize) -> &'static str {
     SEGMENTS.get(index).copied().unwrap_or(OTHER)
-}
-
-fn seconds_of(seconds: i64) -> f64 {
-    f64::from(i32::try_from(seconds).unwrap_or(i32::MAX))
-}
-
-fn sets_of(sets: i64) -> f64 {
-    f64::from(i32::try_from(sets).unwrap_or(i32::MAX))
-}
-
-fn midnight(day: NaiveDate) -> i64 {
-    Local
-        .from_local_datetime(&day.and_time(NaiveTime::MIN))
-        .earliest()
-        .map_or(0, |moment| moment.timestamp())
 }

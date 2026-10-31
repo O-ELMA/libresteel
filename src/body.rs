@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use dioxus_free_icons::{icons::ld_icons::LdPencil, Icon};
 
 use crate::{
+    calendar::long_date,
     db,
     i18n::{use_i18n, I18n},
     overview::{quiet, OverviewTabs},
@@ -85,7 +86,7 @@ pub fn Body() -> Element {
                                 let latest = *latest;
                                 move |_| {
                                     text.set(latest.map_or_else(String::new, |(_, value)| {
-                                      input_value(key, value, lb)
+                                      number(key, value, lb)
                                     }));
                                     open.set(Some(key));
                                 }
@@ -483,14 +484,6 @@ fn unit(field: &str, lb: bool) -> &'static str {
     }
 }
 
-fn input_value(field: &str, value: f64, lb: bool) -> String {
-    if field == "weight" {
-        weight_field(Some(value), lb)
-    } else {
-        trim(value)
-    }
-}
-
 fn label_key(field: &str) -> &'static str {
     FIELDS
         .iter()
@@ -605,15 +598,6 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 }
 
 fn dob_label(i18n: &I18n, raw: &str) -> String {
-    NaiveDate::parse_from_str(raw, "%Y-%m-%d").map_or_else(
-        |_| "--".to_string(),
-        |date| {
-            format!(
-                "{} {}, {}",
-                i18n.month_short(date.month()),
-                date.day(),
-                date.year()
-            )
-        },
-    )
+    NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .map_or_else(|_| "--".to_string(), |date| long_date(i18n, date))
 }

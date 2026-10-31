@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
-use chrono::{Datelike, Days, Local, Months, NaiveDate, NaiveTime, TimeZone};
+use chrono::{Datelike, Days, Local, Months, NaiveDate};
 use dioxus::prelude::*;
 use dioxus_charts::{BarChart, LineChart, PieChart};
 use dioxus_free_icons::{icons::ld_icons::LdChevronDown, Icon};
 
 use crate::{
-    calendar::volume_text,
+    calendar::{first_of_month, local_date, long_date, midnight, volume_text},
     db,
     i18n::{use_i18n, I18n},
     ui::{
-        change, display_weight, duration_label, trim, use_exit, weight_unit, BackIcon, Delta, Sheet,
+        change, display_weight, duration_label, to_f64, trim, use_exit, weight_unit, BackIcon,
+        Delta, Sheet,
     },
 };
 
@@ -155,13 +156,13 @@ pub fn VolumeProgress() -> Element {
     let start_at = window.start_at();
     let end_at = window.end_at();
 
-    let total = seconds_of(quiet(db::sets_between(start_at, end_at)));
+    let total = to_f64(quiet(db::sets_between(start_at, end_at)));
     let previous = window
         .previous()
-        .map(|prev| seconds_of(quiet(db::sets_between(prev.start_at(), prev.end_at()))));
+        .map(|prev| to_f64(quiet(db::sets_between(prev.start_at(), prev.end_at()))));
     let points = quiet(db::sets_sessions_between(start_at, end_at))
         .into_iter()
-        .map(|(epoch, count)| (epoch, seconds_of(count)))
+        .map(|(epoch, count)| (epoch, to_f64(count)))
         .collect::<Vec<_>>();
     let (labels, series) = buckets(&i18n, selected, &points, window);
     let weeks = f64::from(i32::try_from(window.days()).unwrap_or(1).max(1)) / 7.0;
@@ -236,12 +237,12 @@ pub fn TimeProgress() -> Element {
     let sessions = quiet(db::workout_sessions_between(start_at, end_at));
     let minutes = sessions
         .iter()
-        .map(|(epoch, seconds)| (*epoch, seconds_of(*seconds) / 60.0))
+        .map(|(epoch, seconds)| (*epoch, to_f64(*seconds) / 60.0))
         .collect::<Vec<_>>();
     let (labels, series) = buckets(&i18n, selected, &minutes, window);
     let weeks = f64::from(i32::try_from(window.days()).unwrap_or(1).max(1)) / 7.0;
-    let average_minutes = seconds_of(total) / 60.0 / weeks;
-    let delta = previous.and_then(|prev| change(seconds_of(total), seconds_of(prev)));
+    let average_minutes = to_f64(total) / 60.0 / weeks;
+    let delta = previous.and_then(|prev| change(to_f64(total), to_f64(prev)));
 
     rsx! {
         BackHeader {}
@@ -256,7 +257,7 @@ pub fn TimeProgress() -> Element {
                 }
             }
             if let Some(prev) = previous {
-                Compare { kind: Axis::Time, total: seconds_of(total), previous: seconds_of(prev), days: window.days(), range: selected }
+                Compare { kind: Axis::Time, total: to_f64(total), previous: to_f64(prev), days: window.days(), range: selected }
             }
             Chips {
                 labels: RANGES.iter().map(|item| item.label(&i18n)).collect::<Vec<_>>(),
@@ -313,7 +314,7 @@ pub fn MuscleProgress() -> Element {
             if total == 0 {
                 0.0
             } else {
-                chart_value(seconds_of(*count) / seconds_of(total) * 100.0)
+                chart_value(to_f64(*count) / to_f64(total) * 100.0)
             }
         })
         .collect::<Vec<_>>();
@@ -901,15 +902,6 @@ fn short_date(i18n: &I18n, date: NaiveDate) -> String {
     format!("{} {}", i18n.month_short(date.month()), date.day())
 }
 
-fn long_date(i18n: &I18n, date: NaiveDate) -> String {
-    format!(
-        "{} {}, {}",
-        i18n.month_short(date.month()),
-        date.day(),
-        date.year()
-    )
-}
-
 fn range_label(i18n: &I18n, start: NaiveDate, end: NaiveDate) -> String {
     if start.year() == end.year() {
         if start.month() == end.month() {
@@ -984,28 +976,6 @@ fn quiet<T: Default>(result: anyhow::Result<T>) -> T {
         dioxus::logger::tracing::error!("progress query failed: {err:#}");
         T::default()
     })
-}
-
-fn local_date(epoch: i64) -> Option<NaiveDate> {
-    Local
-        .timestamp_opt(epoch, 0)
-        .single()
-        .map(|moment| moment.date_naive())
-}
-
-fn midnight(day: NaiveDate) -> i64 {
-    Local
-        .from_local_datetime(&day.and_time(NaiveTime::MIN))
-        .earliest()
-        .map_or(0, |moment| moment.timestamp())
-}
-
-fn first_of_month(day: NaiveDate) -> NaiveDate {
-    NaiveDate::from_ymd_opt(day.year(), day.month(), 1).unwrap_or(day)
-}
-
-fn seconds_of(value: i64) -> f64 {
-    f64::from(i32::try_from(value).unwrap_or(i32::MAX))
 }
 
 // dioxus-charts takes f32 and stable Rust has no fallible f64 -> f32 conversion.

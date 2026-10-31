@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{Datelike, Days, Local, Months, NaiveDate, TimeZone, Timelike};
+use chrono::{Datelike, Days, Local, Months, NaiveDate, NaiveTime, TimeZone, Timelike};
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::ld_icons::{LdChevronLeft, LdChevronRight, LdSquareKanban},
@@ -13,7 +13,7 @@ use crate::{
     exercises::{thousands, ExerciseThumb},
     i18n::{use_i18n, I18n},
     shell::Route,
-    ui::{display_weight, weight_field, weight_text, weight_unit, BackIcon},
+    ui::{display_weight, set_orm, trim, weight_field, weight_text, weight_unit, BackIcon},
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -295,12 +295,7 @@ pub fn DayLog(date: String) -> Element {
 fn DayHeader(day: NaiveDate) -> Element {
     let i18n = use_i18n();
     let navigator = use_navigator();
-    let title = format!(
-        "{} {}, {}",
-        i18n.month_short(day.month()),
-        day.day(),
-        day.year()
-    );
+    let title = long_date(&i18n, day);
     rsx! {
         header { class: "flex items-center gap-3 px-5 pt-5",
             button {
@@ -324,7 +319,7 @@ fn LogSetRow(
     best_1rm: Option<f64>,
     lb: bool,
 ) -> Element {
-    let orm = set_orm(&set);
+    let orm = set_orm(set.weight, set.reps);
     let highlight = orm.is_some_and(|value| best_1rm.is_some_and(|best| close(value, best)));
     let value = orm.map_or_else(|| "—".to_string(), |value| weight_text(value, lb));
 
@@ -393,7 +388,7 @@ fn record_count(rows: &[LogExercise]) -> i64 {
             let day_best = row
                 .sets
                 .iter()
-                .filter_map(|entry| set_orm(&entry.set))
+                .filter_map(|entry| set_orm(entry.set.weight, entry.set.reps))
                 .reduce(f64::max);
             row.best_1rm
                 .is_some_and(|best| day_best.is_some_and(|value| close(value, best)))
@@ -475,24 +470,8 @@ fn field_cell(field: Field, log_type: &str, set: &SessionSet, lb: bool) -> Strin
     }
 }
 
-fn set_orm(set: &SessionSet) -> Option<f64> {
-    let weight = set.weight?;
-    let reps = set.reps?;
-    if weight <= 0.0 || !(1..=30).contains(&reps) {
-        return None;
-    }
-    Some(weight * (1.0 + f64::from(i32::try_from(reps).unwrap_or(0)) / 30.0))
-}
-
 fn close(left: f64, right: f64) -> bool {
     (left - right).abs() < 0.005
-}
-
-fn trim(value: f64) -> String {
-    format!("{value:.2}")
-        .trim_end_matches('0')
-        .trim_end_matches('.')
-        .to_string()
 }
 
 pub fn volume_text(volume: f64) -> String {
@@ -539,15 +518,31 @@ fn time_text(i18n: &I18n, epoch: i64) -> String {
     )
 }
 
-fn local_date(epoch: i64) -> Option<NaiveDate> {
+pub fn local_date(epoch: i64) -> Option<NaiveDate> {
     Local
         .timestamp_opt(epoch, 0)
         .single()
         .map(|moment| moment.date_naive())
 }
 
-fn first_of_month(day: NaiveDate) -> NaiveDate {
+pub fn midnight(day: NaiveDate) -> i64 {
+    Local
+        .from_local_datetime(&day.and_time(NaiveTime::MIN))
+        .earliest()
+        .map_or(0, |moment| moment.timestamp())
+}
+
+pub fn first_of_month(day: NaiveDate) -> NaiveDate {
     NaiveDate::from_ymd_opt(day.year(), day.month(), 1).unwrap_or(day)
+}
+
+pub fn long_date(i18n: &I18n, date: NaiveDate) -> String {
+    format!(
+        "{} {}, {}",
+        i18n.month_short(date.month()),
+        date.day(),
+        date.year()
+    )
 }
 
 fn month_cells(month: NaiveDate, first: u32) -> Vec<Option<NaiveDate>> {

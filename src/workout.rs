@@ -18,7 +18,8 @@ use crate::{
     session::ActiveSessionPill,
     shell::Route,
     ui::{
-        parse_weight, use_exit, weight_field, BackIcon, BodyIcon, DeleteButton, RowActions, Sheet,
+        km_text, minutes_text, option_text, parse_weight, use_exit, weight_field, BackIcon,
+        BodyIcon, DeleteButton, RowActions, Sheet,
     },
 };
 
@@ -417,16 +418,13 @@ fn settle_reorder(
         dioxus::logger::tracing::error!("reorder could not read day {day_id}");
         return;
     };
-    let mut ids = exercises
+    let ids = exercises
         .iter()
         .map(|exercise| exercise.id)
         .collect::<Vec<_>>();
-    let Some(position) = ids.iter().position(|id| *id == state.id) else {
+    let Some(ids) = reorder_ids(ids, state.id, state.to) else {
         return;
     };
-    ids.remove(position);
-    let to = state.to.min(ids.len());
-    ids.insert(to, state.id);
     match db::set_exercise_order(day_id, &ids) {
         Ok(()) => {
             dragged_at.set(Some(std::time::Instant::now()));
@@ -453,13 +451,10 @@ fn settle_day_reorder(
         dioxus::logger::tracing::error!("reorder could not read routine {routine_id}");
         return;
     };
-    let mut ids = days.iter().map(|day| day.id).collect::<Vec<_>>();
-    let Some(position) = ids.iter().position(|id| *id == state.id) else {
+    let ids = days.iter().map(|day| day.id).collect::<Vec<_>>();
+    let Some(ids) = reorder_ids(ids, state.id, state.to) else {
         return;
     };
-    ids.remove(position);
-    let to = state.to.min(ids.len());
-    ids.insert(to, state.id);
     match db::set_day_order(routine_id, &ids, split) {
         Ok(()) => {
             dragged_at.set(Some(std::time::Instant::now()));
@@ -467,6 +462,13 @@ fn settle_day_reorder(
         }
         Err(err) => dioxus::logger::tracing::error!("reorder failed: {err:#}"),
     }
+}
+
+fn reorder_ids(mut ids: Vec<i64>, id: i64, to: usize) -> Option<Vec<i64>> {
+    let position = ids.iter().position(|entry| *entry == id)?;
+    ids.remove(position);
+    ids.insert(to.min(ids.len()), id);
+    Some(ids)
 }
 
 fn bump(mut revision: Signal<u32>) {
@@ -1118,7 +1120,7 @@ fn SetRow(
             }
             if uses_reps {
                 NumField {
-                    value: number_text(reps),
+                    value: option_text(reps),
                     onsave: move |raw: String| {
                         let reps = raw.trim().parse::<i64>().ok();
                         save_set(entry, number, weight, reps, seconds, distance, onchange);
@@ -1127,7 +1129,7 @@ fn SetRow(
             }
             if uses_seconds {
                 NumField {
-                    value: number_text(seconds),
+                    value: option_text(seconds),
                     onsave: move |raw: String| {
                         let seconds = raw.trim().parse::<i64>().ok();
                         save_set(entry, number, weight, reps, seconds, distance, onchange);
@@ -1560,18 +1562,6 @@ fn joined(values: impl Iterator<Item = Option<i64>>) -> String {
     } else {
         list.join(",")
     }
-}
-
-fn number_text(value: Option<impl std::fmt::Display>) -> String {
-    value.map_or_else(String::new, |value| value.to_string())
-}
-
-fn minutes_text(seconds: Option<i64>) -> String {
-    seconds.map_or_else(String::new, |seconds| (seconds / 60).to_string())
-}
-
-fn km_text(distance_m: Option<f64>) -> String {
-    distance_m.map_or_else(String::new, |distance| (distance / 1000.0).to_string())
 }
 
 const fn card_class(dragged: bool) -> &'static str {

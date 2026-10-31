@@ -28,6 +28,31 @@ pub fn trim(value: f64) -> String {
         .to_string()
 }
 
+pub fn option_text(value: Option<impl std::fmt::Display>) -> String {
+    value.map_or_else(String::new, |value| value.to_string())
+}
+
+pub fn minutes_text(seconds: Option<i64>) -> String {
+    seconds.map_or_else(String::new, |seconds| (seconds / 60).to_string())
+}
+
+pub fn km_text(distance_m: Option<f64>) -> String {
+    distance_m.map_or_else(String::new, |distance| (distance / 1000.0).to_string())
+}
+
+pub fn to_f64(value: i64) -> f64 {
+    f64::from(i32::try_from(value).unwrap_or(i32::MAX))
+}
+
+pub fn set_orm(weight: Option<f64>, reps: Option<i64>) -> Option<f64> {
+    let weight = weight?;
+    let reps = reps?;
+    if weight <= 0.0 || !(1..=30).contains(&reps) {
+        return None;
+    }
+    Some(weight * (1.0 + f64::from(i32::try_from(reps).unwrap_or(0)) / 30.0))
+}
+
 pub fn duration_label(seconds: i64) -> String {
     let minutes = seconds.saturating_add(30) / 60;
     let hours = minutes / 60;
