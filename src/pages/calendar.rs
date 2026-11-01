@@ -8,12 +8,15 @@ use dioxus_free_icons::{
 };
 
 use crate::{
-    bodymap::BodyMap,
+    components::bodymap::BodyMap,
+    components::exercise::{thousands, ExerciseThumb},
+    components::shell::Route,
+    components::ui::{
+        display_weight, set_orm, trim, weight_field, weight_text, weight_unit, BackIcon, IconButton,
+        IconShape, IconTone,
+    },
     db::{self, ActiveSession, SessionSet},
-    exercises::{thousands, ExerciseThumb},
     i18n::{use_i18n, I18n},
-    shell::Route,
-    ui::{display_weight, set_orm, trim, weight_field, weight_text, weight_unit, BackIcon},
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -63,9 +66,9 @@ pub fn CalendarCard() -> Element {
                 div { class: "flex items-center justify-between ps-2",
                     div { class: "text-lg font-semibold", "{title}" }
                     div { class: "flex items-center",
-                        button {
-                            class: "grid size-10 place-items-center rounded-full text-muted",
-                            "aria-label": i18n.t("calendar.previousMonth"),
+                        IconButton {
+                            shape: IconShape::Full,
+                            label: i18n.t("calendar.previousMonth"),
                             onclick: move |_| {
                                 if let Some(previous) = month().checked_sub_months(Months::new(1)) {
                                     month.set(previous);
@@ -77,9 +80,9 @@ pub fn CalendarCard() -> Element {
                                 Icon { icon: LdChevronLeft, width: 22, height: 22 }
                             }
                         }
-                        button {
-                            class: "grid size-10 place-items-center rounded-full text-muted",
-                            "aria-label": i18n.t("calendar.nextMonth"),
+                        IconButton {
+                            shape: IconShape::Full,
+                            label: i18n.t("calendar.nextMonth"),
                             onclick: move |_| {
                                 if let Some(next) = month().checked_add_months(Months::new(1)) {
                                     month.set(next);
@@ -248,9 +251,11 @@ pub fn DayLog(date: String) -> Element {
                         div { class: "min-w-0 flex-1 truncate text-base font-semibold",
                             "{exercise.name}"
                         }
-                        button {
-                            class: "ms-auto grid size-10 shrink-0 place-items-center rounded-xl bg-tile text-muted",
-                            "aria-label": i18n.t("session.history"),
+                        IconButton {
+                            tone: IconTone::Tile,
+                            shape: IconShape::Rounded,
+                            class: "ms-auto shrink-0",
+                            label: i18n.t("session.history"),
                             onclick: {
                                 let id = exercise.exercise_id;
                                 move |_| {

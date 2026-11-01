@@ -4,7 +4,9 @@ use crate::{
     db,
     i18n::{use_i18n, I18n},
     transfer::{self, Backup, Counts},
-    ui::{use_exit, BackIcon, Sheet},
+    components::ui::{
+        use_exit, BackIcon, Button, ButtonSize, ButtonTone, Card, Sheet,
+    },
 };
 
 #[derive(Clone, PartialEq)]
@@ -217,27 +219,28 @@ pub fn DataTransfer() -> Element {
         div { class: "px-5 pb-10",
             p { class: "mt-4 text-sm leading-6 text-muted", "{i18n.t(\"data.intro\")}" }
 
-            div { class: "mt-5 rounded-2xl bg-tile p-4",
+            Card { class: "mt-5 p-4",
                 h2 { class: "text-base font-semibold", "{i18n.t(\"data.export\")}" }
                 p { class: "mt-1 text-sm leading-6 text-muted", "{i18n.t(\"data.exportNote\")}" }
-                button {
-                    class: "mt-3 h-12 w-full rounded-2xl bg-lilac text-base font-semibold text-black",
+                Button {
+                    class: "mt-3",
                     onclick: export,
                     "{i18n.t(\"data.export\")}"
                 }
             }
 
-            div { class: "mt-4 rounded-2xl bg-tile p-4",
+            Card { class: "mt-4 p-4",
                 h2 { class: "text-base font-semibold", "{i18n.t(\"data.template\")}" }
                 p { class: "mt-1 text-sm leading-6 text-muted", "{i18n.t(\"data.templateNote\")}" }
-                button {
-                    class: "mt-3 h-12 w-full rounded-2xl bg-white/10 text-base font-semibold",
+                Button {
+                    tone: ButtonTone::White,
+                    class: "mt-3",
                     onclick: template,
                     "{i18n.t(\"data.template\")}"
                 }
             }
 
-            div { class: "mt-4 rounded-2xl bg-tile p-4",
+            Card { class: "mt-4 p-4",
                 h2 { class: "text-base font-semibold", "{i18n.t(\"data.import\")}" }
                 p { class: "mt-1 text-sm leading-6 text-muted", "{i18n.t(\"data.importNote\")}" }
                 button {
@@ -265,7 +268,7 @@ pub fn DataTransfer() -> Element {
             }
 
             h2 { class: "mt-7 text-sm font-semibold text-muted", "{i18n.t(\"data.format\")}" }
-            div { class: "mt-2 rounded-2xl bg-tile p-4",
+            Card { class: "mt-2 p-4",
                 p { class: "text-sm leading-6 text-muted", "{i18n.t(\"data.formatNote\")}" }
                 for (key, label) in [
                     ("settings", i18n.t("data.sections.settings")),
@@ -298,13 +301,17 @@ pub fn DataTransfer() -> Element {
                     }
                     p { class: "mt-3 text-sm leading-6 text-muted", "{i18n.t(\"data.previewDeletes\")}" }
                     div { class: "mt-5 flex gap-2",
-                        button {
-                            class: "h-11 flex-1 rounded-xl bg-white/10 text-sm font-medium",
+                        Button {
+                            size: ButtonSize::Md,
+                            tone: ButtonTone::White,
+                            class: "flex-1",
                             onclick: move |_| close_asking.call(()),
                             "{i18n.t(\"data.cancel\")}"
                         }
-                        button {
-                            class: "h-11 flex-1 rounded-xl bg-red-500 px-2 text-sm font-semibold text-black",
+                        Button {
+                            size: ButtonSize::Md,
+                            tone: ButtonTone::Danger,
+                            class: "flex-1",
                             onclick: move |_| do_replace.call(()),
                             "{i18n.t(\"data.replace\")}"
                         }

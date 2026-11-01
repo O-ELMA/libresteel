@@ -1,29 +1,16 @@
-mod body;
-mod bodymap;
-mod calendar;
-mod data;
+mod components;
 mod db;
-mod energy;
-mod exercises;
 mod i18n;
 mod media;
-mod onboarding;
-mod overview;
-mod progress;
-mod routines;
-mod session;
-mod settings;
-mod shell;
+mod pages;
 mod suggest;
 mod transfer;
-mod ui;
-mod workout;
 
 use std::path::Path;
 
+use components::shell::Route;
+use components::ui::Sheets;
 use dioxus::prelude::*;
-use shell::Route;
-use ui::Sheets;
 
 #[cfg(feature = "desktop")]
 use dioxus::desktop as platform;
@@ -93,7 +80,7 @@ fn App() -> Element {
         if onboarded() {
             Router::<Route> {}
         } else {
-            onboarding::Onboarding { ondone: move |()| onboarded.set(true) }
+            pages::onboarding::Onboarding { ondone: move |()| onboarded.set(true) }
         }
     }
 }

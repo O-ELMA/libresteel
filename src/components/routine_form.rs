@@ -1,14 +1,10 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::{
-    icons::ld_icons::{LdCopy, LdPlus},
-    Icon,
-};
 
 use crate::{
+    components::shell::Route,
+    components::ui::{Button, Chip, TextField},
     db,
-    i18n::{use_i18n, I18n},
-    shell::Route,
-    ui::{use_exit, BackIcon, RowActions},
+    i18n::use_i18n,
 };
 
 const LEVELS: [&str; 3] = ["beginner", "intermediate", "advanced"];
@@ -17,145 +13,6 @@ const SPLITS: [(&str, &str); 2] = [
     ("numbered", "routines.numbered"),
     ("weekday", "routines.weekday"),
 ];
-
-#[derive(Clone, Copy, PartialEq)]
-enum FormMode {
-    Create,
-    Edit(i64),
-}
-
-#[component]
-pub fn Routines() -> Element {
-    let i18n = use_i18n();
-    let navigator = use_navigator();
-    let mut revision = use_signal(|| 0u32);
-    let _ = revision.cloned();
-    let rows = db::routines().unwrap_or_else(|err| {
-        dioxus::logger::tracing::error!("routines failed: {err:#}");
-        Vec::new()
-    });
-    let mut form = use_signal(|| rows.is_empty().then_some(FormMode::Create));
-    let (form_closing, close_form) = use_exit(form, None, Option::is_some);
-
-    let editing = form.cloned().and_then(|mode| match mode {
-        FormMode::Create => None,
-        FormMode::Edit(id) => rows.iter().find(|routine| routine.id == id).cloned(),
-    });
-    let editing_key = match form.cloned() {
-        Some(FormMode::Edit(id)) => id,
-        _ => 0,
-    };
-
-    rsx! {
-        div { class: "flex h-[calc(100dvh-6rem)] flex-col overflow-hidden",
-            header { class: "flex items-center gap-3 px-5 pt-5",
-                button {
-                    class: "text-lead",
-                    onclick: move |_| navigator.go_back(),
-                    BackIcon { size: 24 }
-                }
-                h1 { class: "text-[22px] font-bold tracking-tight", "{i18n.t(\"routines.title\")}" }
-                button {
-                    class: "ms-auto flex h-11 items-center gap-1 px-2 text-sm font-semibold text-accent-ink",
-                    onclick: move |_| form.set(Some(FormMode::Create)),
-                    Icon { icon: LdPlus, width: 18, height: 18 }
-                    "{i18n.t(\"routines.create\")}"
-                }
-            }
-            div { class: "min-h-0 flex-1 overflow-y-auto pb-12",
-                if rows.is_empty() {
-                    p { class: "px-5 pt-10 text-center text-base text-muted",
-                        "{i18n.t(\"routines.empty\")}"
-                    }
-                }
-                div { class: "mt-5 flex flex-col gap-4 px-5",
-                    for routine in rows.iter() {
-                    div {
-                        key: "{routine.id}",
-                        class: "rounded-2xl bg-linear-to-br from-accent/25 to-tile p-4",
-                        div { class: "flex items-start justify-between gap-3",
-                            if routine.is_active {
-                                span { class: "rounded-md bg-accent px-2.5 py-1 text-[11px] font-bold tracking-wider",
-                                    "{i18n.t(\"routines.current\")}"
-                                }
-                            } else {
-                                span { class: "h-6" }
-                            }
-                            div { class: "flex items-start",
-                                button {
-                                    class: "grid size-10 place-items-center text-muted",
-                                    "aria-label": i18n.t("routines.clone"),
-                                    onclick: {
-                                        let id = routine.id;
-                                        let name = i18n.ta("routines.copyName", &[("name", &routine.name)]);
-                                        move |_| match db::clone_routine(id, &name) {
-                                            Ok(_) => *revision.write() += 1,
-                                            Err(err) => {
-                                                dioxus::logger::tracing::error!("clone routine {id} failed: {err:#}");
-                                            }
-                                        }
-                                    },
-                                    Icon { icon: LdCopy, width: 18, height: 18 }
-                                }
-                                RowActions {
-                                    vertical: true,
-                                    onedit: {
-                                        let id = routine.id;
-                                        move |()| form.set(Some(FormMode::Edit(id)))
-                                    },
-                                    ondelete: {
-                                        let id = routine.id;
-                                        move |()| match db::delete_routine(id) {
-                                            Ok(()) => *revision.write() += 1,
-                                            Err(err) => {
-                                                dioxus::logger::tracing::error!("delete routine {id} failed: {err:#}");
-                                            }
-                                        }
-                                    },
-                                }
-                            }
-                        }
-                        h2 { class: "mt-10 text-xl font-bold leading-tight", "{routine.name}" }
-                        p { class: "mt-1 text-[12px] font-semibold tracking-wide text-lead/60",
-                            "{meta(&i18n, routine)}"
-                        }
-                        if !routine.is_active {
-                            div { class: "mt-4 flex justify-end",
-                                button {
-                                    class: "h-10 rounded-xl bg-white/10 px-5 text-sm font-semibold",
-                                    onclick: {
-                                        let id = routine.id;
-                                        move |_| match db::select_routine(id) {
-                                            Ok(()) => {
-                                                *revision.write() += 1;
-                                            }
-                                            Err(err) => {
-                                                dioxus::logger::tracing::error!("select routine {id} failed: {err:#}");
-                                            }
-                                        }
-                                    },
-                                    "{i18n.t(\"routines.select\")}"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        }
-        if form.cloned().is_some() {
-            RoutineForm {
-                key: "{editing_key}",
-                closing: form_closing(),
-                routine: editing,
-                onclose: close_form,
-                onsave: move |()| {
-                    *revision.write() += 1;
-                },
-            }
-        }
-    }
-}
 
 #[component]
 pub fn RoutineForm(
@@ -258,20 +115,19 @@ pub fn RoutineForm(
                 onclick: move |_| onclose.call(()),
             }
             div { class: "relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sheet-panel{state}",
-                label { class: "block text-sm text-muted", "{i18n.t(\"routines.name\")}" }
-                input {
-                    class: "mt-2 h-12 w-full rounded-2xl bg-tile px-4 text-base text-lead outline-none",
+                TextField {
+                    label: i18n.t("routines.name"),
                     placeholder: i18n.t("routines.namePlaceholder"),
-                    value: "{name}",
-                    oninput: move |event| name.set(event.value()),
-                }
-                if name.read().trim().is_empty() {
-                    p { class: "mt-1.5 text-[13px] text-muted", "{i18n.t(\"routines.nameRequired\")}" }
+                    value: name.cloned(),
+                    oninput: move |value| name.set(value),
+                    if name.read().trim().is_empty() {
+                        p { class: "mt-1.5 text-[13px] text-muted", "{i18n.t(\"routines.nameRequired\")}" }
+                    }
                 }
                 div { class: "mt-4 text-sm text-muted", "{i18n.t(\"routines.level\")}" }
                 div { class: "mt-2 flex flex-wrap gap-2",
                     for key in LEVELS {
-                        OptionChip {
+                        Chip {
                             label: i18n.value("exercises.levels", key),
                             selected: level.cloned().as_deref() == Some(key),
                             onclick: move |_| toggle_option(level, key),
@@ -281,7 +137,7 @@ pub fn RoutineForm(
                 div { class: "mt-4 text-sm text-muted", "{i18n.t(\"routines.goal\")}" }
                 div { class: "mt-2 flex flex-wrap gap-2",
                     for key in GOALS {
-                        OptionChip {
+                        Chip {
                             label: i18n.value("routines.goals", key),
                             selected: goal.cloned().as_deref() == Some(key),
                             onclick: move |_| toggle_option(goal, key),
@@ -304,7 +160,7 @@ pub fn RoutineForm(
                 }
                 div { class: "mt-2 flex flex-wrap gap-2",
                     for (enabled, label) in [(true, i18n.t("routines.mesocycleOn")), (false, i18n.t("routines.mesocycleOff"))] {
-                        OptionChip {
+                        Chip {
                             label,
                             selected: block_on.cloned() == enabled,
                             onclick: move |_| block_on.set(enabled),
@@ -314,7 +170,7 @@ pub fn RoutineForm(
                 if block_on() {
                     div { class: "mt-2 flex flex-wrap gap-2",
                         for weeks in [4i64, 5, 6] {
-                            OptionChip {
+                            Chip {
                                 label: i18n.tn("routines.mesocycleWeeks", weeks),
                                 selected: block.cloned() == weeks,
                                 onclick: move |_| block.set(weeks),
@@ -325,7 +181,7 @@ pub fn RoutineForm(
                 div { class: "mt-4 text-sm text-muted", "{i18n.t(\"routines.split\")}" }
                 div { class: "mt-2 flex flex-wrap gap-2",
                     for (key, label) in SPLITS {
-                        OptionChip {
+                        Chip {
                             label: i18n.t(label),
                             selected: split.cloned() == key,
                             onclick: move |_| split.set(key.to_string()),
@@ -371,31 +227,15 @@ pub fn RoutineForm(
                         }
                     }
                 }
-                button {
-                    class: if can_save {
-                        "mt-6 h-12 w-full rounded-2xl bg-lilac text-base font-semibold text-black"
-                    } else {
-                        "mt-6 h-12 w-full rounded-2xl bg-tile text-base font-semibold text-muted"
-                    },
+                Button {
                     disabled: !can_save,
+                    class: "mt-6",
                     onclick: save,
                     "{i18n.t(\"common.actions.save\")}"
                 }
             }
         }
     }
-}
-
-fn meta(i18n: &I18n, routine: &db::Routine) -> String {
-    let mut parts = Vec::new();
-    if let Some(level) = &routine.level {
-        parts.push(i18n.value("exercises.levels", level).to_uppercase());
-    }
-    if let Some(goal) = &routine.goal {
-        parts.push(i18n.value("routines.goals", goal).to_uppercase());
-    }
-    parts.push(i18n.tn("routines.dayCount", routine.day_count));
-    parts.join(" • ")
 }
 
 fn seeds_for(split: &str, days: i64, weekdays: &[i64]) -> Vec<db::DaySeed> {
@@ -439,19 +279,4 @@ fn toggle_option(mut signal: Signal<Option<String>>, key: &str) {
         Some(key.to_string())
     };
     signal.set(next);
-}
-
-#[component]
-fn OptionChip(label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
-    rsx! {
-        button {
-            class: if selected {
-                "h-10 rounded-xl bg-lilac px-4 text-sm font-medium text-black"
-            } else {
-                "h-10 rounded-xl border border-line px-4 text-sm font-medium text-lead"
-            },
-            onclick,
-            "{label}"
-        }
-    }
 }

@@ -7,18 +7,19 @@ use dioxus_free_icons::{
 };
 
 use crate::{
-    calendar::volume_text,
+    components::exercise::{art_for, ExerciseThumb},
+    components::shell::Route,
+    components::ui::{
+        display_weight, km_text, long_clock, minutes_text, option_text, parse_weight, set_orm,
+        weight_field, weight_unit, BackIcon, Button, ButtonSize, DeleteButton, IconButton, IconShape,
+        IconSize, IconTone,
+    },
     db::{self, ActiveSession, SessionExercise, SessionSet},
     dioxus_router::Navigator,
-    exercises::{art_for, ExerciseThumb},
     i18n::{use_i18n, I18n},
     media,
-    shell::Route,
+    pages::calendar::volume_text,
     suggest::{self, Block, Goal},
-    ui::{
-        display_weight, km_text, minutes_text, option_text, parse_weight, set_orm, weight_field,
-        weight_unit, BackIcon, DeleteButton,
-    },
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -119,47 +120,6 @@ pub fn Session() -> Element {
     };
     rsx! {
         LiveSession { session }
-    }
-}
-
-#[component]
-pub(crate) fn ActiveSessionPill() -> Element {
-    let i18n = use_i18n();
-    let navigator = use_navigator();
-    let Some(active) = db::active_session().unwrap_or_else(|err| {
-        dioxus::logger::tracing::error!("active session failed: {err:#}");
-        None
-    }) else {
-        return rsx! {};
-    };
-    let name = db::session_exercises(&active).map_or_else(
-        |_| active.name.clone(),
-        |rows| {
-            rows.get(db::current_position(&rows))
-                .map_or_else(|| active.name.clone(), |row| row.name.clone())
-        },
-    );
-    rsx! {
-        div { class: "fixed bottom-24 left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-5",
-            div {
-                class: "flex items-center gap-3 rounded-full border border-line bg-tile py-1.5 ps-5 pe-1.5 shadow-xl",
-                onclick: move |_| {
-                    navigator.push(Route::Session {});
-                },
-                div { class: "min-w-0 flex-1",
-                    Elapsed { started_at: active.started_at }
-                    div { class: "truncate text-sm font-semibold", "{name}" }
-                }
-                button {
-                    class: "h-11 shrink-0 rounded-full bg-lilac px-4 text-sm font-semibold text-black",
-                    onclick: move |event: MouseEvent| {
-                        event.stop_propagation();
-                        navigator.push(Route::SessionSummary {});
-                    },
-                    "{i18n.t(\"workout.endWorkout\")}"
-                }
-            }
-        }
     }
 }
 
@@ -445,9 +405,12 @@ fn LiveSession(session: ActiveSession) -> Element {
                         img { src: art, alt: "", class: "h-full w-full object-cover opacity-30" }
                     }
                 }
-                button {
-                    class: "absolute start-5 top-5 grid size-11 place-items-center rounded-xl bg-white/10 text-lead",
-                    "aria-label": i18n.t("common.labels.back"),
+                IconButton {
+                    size: IconSize::Lg,
+                    tone: IconTone::White,
+                    shape: IconShape::Rounded,
+                    class: "absolute start-5 top-5",
+                    label: i18n.t("common.labels.back"),
                     onclick: move |_| {
                         navigator.go_back();
                     },
@@ -540,9 +503,11 @@ fn LiveSession(session: ActiveSession) -> Element {
                                     "{i18n.t(\"session.superset\")}"
                                 }
                             }
-                            button {
-                                class: "ms-auto grid size-10 shrink-0 place-items-center rounded-xl bg-tile text-muted",
-                                "aria-label": i18n.t("session.history"),
+                            IconButton {
+                                tone: IconTone::Tile,
+                                shape: IconShape::Rounded,
+                                class: "ms-auto shrink-0",
+                                label: i18n.t("session.history"),
                                 onclick: {
                                     let id = exercise.exercise_id;
                                     move |_| {
@@ -884,9 +849,8 @@ fn CompleteScreen(session: ActiveSession, onback: EventHandler<()>) -> Element {
     rsx! {
         div { class: "flex h-dvh flex-col bg-surface",
             header { class: "flex items-center gap-2 px-5 pt-5",
-                button {
-                    class: "grid size-10 place-items-center text-muted",
-                    "aria-label": i18n.t("common.labels.back"),
+                IconButton {
+                    label: i18n.t("common.labels.back"),
                     onclick: move |_| onback.call(()),
                     BackIcon { size: 24 }
                 }
@@ -947,8 +911,9 @@ fn CompleteScreen(session: ActiveSession, onback: EventHandler<()>) -> Element {
                         Err(err) => dioxus::logger::tracing::error!("discard failed: {err:#}"),
                     },
                 }
-                button {
-                    class: "h-14 flex-1 rounded-2xl bg-lilac text-base font-semibold text-black",
+                Button {
+                    size: ButtonSize::Xl,
+                    class: "flex-1",
                     onclick: move |_| {
                         match db::finish_session(session.id) {
                             Ok(()) => {
@@ -1402,29 +1367,7 @@ fn clock(seconds: i64) -> String {
     format!("{minutes:02}:{rest:02}")
 }
 
-fn long_clock(seconds: i64) -> String {
-    let hours = seconds / 3600;
-    let minutes = seconds % 3600 / 60;
-    let rest = seconds % 60;
-    format!("{hours}:{minutes:02}:{rest:02}")
-}
-
 fn orm_text(value: f64) -> String {
     let text = format!("{:.2}", (value * 4.0).round() / 4.0);
     text.trim_end_matches('0').trim_end_matches('.').to_string()
-}
-
-#[component]
-pub(crate) fn Elapsed(started_at: i64) -> Element {
-    let mut now = use_signal(db::now);
-    use_future(move || async move {
-        loop {
-            futures_timer::Delay::new(Duration::from_secs(1)).await;
-            now.set(db::now());
-        }
-    });
-    let elapsed = now().saturating_sub(started_at);
-    rsx! {
-        span { class: "font-semibold tabular-nums text-sky", "{long_clock(elapsed)}" }
-    }
 }

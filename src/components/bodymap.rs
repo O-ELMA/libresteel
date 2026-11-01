@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use dioxus::prelude::*;
 
-const BODY: &str = include_str!("../assets/muscles/body.svg");
+const BODY: &str = include_str!("../../assets/muscles/body.svg");
 
 #[rustfmt::skip]
 const BODY_GROUPS: [(&str, &str); 12] = [

@@ -2,13 +2,13 @@ use chrono::{Days, Local};
 use dioxus::prelude::*;
 
 use crate::{
-    calendar::{midnight, week_start, CalendarCard},
+    components::active_session::ActiveSessionPill,
+    components::exercise::ExerciseThumb,
+    components::shell::Route,
+    components::ui::{change, duration_label, quiet, to_f64, weight_text, Delta, ForwardIcon},
     db,
-    exercises::ExerciseThumb,
     i18n::{use_i18n, I18n},
-    session::ActiveSessionPill,
-    shell::Route,
-    ui::{change, duration_label, to_f64, weight_text, Delta, ForwardIcon},
+    pages::calendar::{midnight, week_start, CalendarCard},
 };
 
 const SEGMENTS: [&str; 4] = ["bg-mango", "bg-lime", "bg-lilac", "bg-sky"];
@@ -174,13 +174,6 @@ fn Metric(to: Route, title: String, value: String, delta: Option<f64>, tone: &'s
             div { class: "mt-1 text-sm text-black/60", "{i18n.t(\"overview.thisWeek\")}" }
         }
     }
-}
-
-pub fn quiet<T: Default>(result: anyhow::Result<T>) -> T {
-    result.unwrap_or_else(|err| {
-        dioxus::logger::tracing::error!("overview query failed: {err:#}");
-        T::default()
-    })
 }
 
 fn groups(mut rows: Vec<(String, i64)>, i18n: &I18n) -> Vec<(String, i64)> {

@@ -7,10 +7,14 @@ use dioxus_free_icons::{
 };
 
 use crate::{
-    body::{self, DobSheet},
+    components::body_sheet::{dob_text, dob_timestamp, DobSheet},
+    components::ui::{
+        parse_weight, trim, use_exit, weight_field, weight_unit, BackIcon, ForwardIcon, IconButton,
+        IconShape, IconSize, IconTone, Sheet,
+    },
     db,
     i18n::use_i18n,
-    ui::{parse_weight, trim, use_exit, weight_field, weight_unit, BackIcon, ForwardIcon, Sheet},
+    pages::body,
 };
 
 const STEPS: usize = 6;
@@ -313,9 +317,12 @@ pub fn Onboarding(ondone: EventHandler<()>) -> Element {
 
                 footer { class: "sticky bottom-0 flex items-center gap-3 bg-surface pt-2",
                     if current > 0 {
-                        button {
-                            class: "grid size-14 shrink-0 place-items-center rounded-full bg-tile text-lead",
-                            "aria-label": i18n.t("onboarding.back"),
+                        IconButton {
+                            size: IconSize::Xl,
+                            tone: IconTone::TileLead,
+                            shape: IconShape::Full,
+                            class: "shrink-0",
+                            label: i18n.t("onboarding.back"),
                             onclick: move |_| back.call(()),
                             BackIcon { size: 22 }
                         }
@@ -343,9 +350,9 @@ pub fn Onboarding(ondone: EventHandler<()>) -> Element {
                 closing: dob_closing(),
                 onclose: close_dob,
                 DobSheet {
-                    initial: body::dob_text(dob.cloned()),
+                    initial: dob_text(dob.cloned()),
                     onsave: move |value: String| {
-                        let at = body::dob_timestamp(&value);
+                        let at = dob_timestamp(&value);
                         if let Err(err) = db::set_dob(at) {
                             dioxus::logger::tracing::error!("set birth date failed: {err:#}");
                         }

@@ -1,15 +1,15 @@
 use dioxus::prelude::*;
 
 use crate::{
-    body::{age, BodyFormSheet},
-    calendar::volume_text,
+    components::body_sheet::BodyFormSheet,
+    components::ui::{
+        display_weight, quiet, stored_weight, trim, use_exit, weight_unit, BackIcon, Button,
+        ButtonSize, Card, ForwardIcon, Sheet, LB_PER_KG,
+    },
     db,
     i18n::{use_i18n, I18n},
-    overview::quiet,
-    ui::{
-        display_weight, stored_weight, trim, use_exit, weight_unit, BackIcon, ForwardIcon, Sheet,
-        LB_PER_KG,
-    },
+    pages::body::age,
+    pages::calendar::volume_text,
 };
 
 const ACTIVITIES: [(&str, f64); 5] = [
@@ -149,7 +149,7 @@ pub fn BodyEnergy() -> Element {
             span { class: "size-6" }
         }
         div { class: "px-5",
-            div { class: "mt-5 rounded-2xl bg-tile p-4",
+            Card { class: "mt-5 p-4",
                 h2 { class: "text-base font-semibold", "{i18n.t(\"energy.formula\")}" }
                 button {
                     class: "mt-3 flex h-12 w-full items-center justify-between rounded-xl bg-surface px-4 text-start",
@@ -161,7 +161,7 @@ pub fn BodyEnergy() -> Element {
                 }
             }
             if let Some((bmr, tdee, target, daily_kg)) = estimate {
-                div { class: "mt-3 rounded-2xl bg-tile p-4",
+                Card { class: "mt-3 p-4",
                     h2 { class: "text-base font-semibold", "{i18n.t(\"energy.activity\")}" }
                     button {
                         class: "mt-3 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl bg-surface px-4 py-2 text-start",
@@ -172,7 +172,7 @@ pub fn BodyEnergy() -> Element {
                         ForwardIcon { size: 18 }
                     }
                 }
-                div { class: "mt-3 rounded-2xl bg-tile p-4",
+                Card { class: "mt-3 p-4",
                     div { class: "flex rounded-xl bg-surface p-1",
                         for (value, key) in [(0i8, "weight"), (1, "calories")] {
                             button {
@@ -234,7 +234,7 @@ pub fn BodyEnergy() -> Element {
                         }
                     }
                 }
-                div { class: "mt-3 rounded-2xl bg-tile p-4",
+                Card { class: "mt-3 p-4",
                     div { class: "flex items-center justify-between",
                         div {
                             div { class: "text-sm text-muted", "{i18n.t(\"energy.bmr\")}" }
@@ -266,13 +266,14 @@ pub fn BodyEnergy() -> Element {
                     }
                 }
             } else {
-                div { class: "mt-3 rounded-2xl bg-tile p-4",
+                Card { class: "mt-3 p-4",
                     h2 { class: "text-base font-semibold", "{i18n.t(\"energy.missingTitle\")}" }
                     p { class: "mt-2 text-sm leading-6 text-muted",
                         "{i18n.ta(\"energy.missingBody\", &[(\"fields\", &missing.join(\", \"))])}"
                     }
-                    button {
-                        class: "mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-lilac text-sm font-semibold text-black",
+                    Button {
+                        size: ButtonSize::Wide,
+                        class: "mt-4 flex items-center justify-center",
                         onclick: move |_| form_open.set(true),
                         "{i18n.t(\"energy.fillBody\")}"
                     }

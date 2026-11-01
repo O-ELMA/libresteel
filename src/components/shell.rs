@@ -5,18 +5,18 @@ use dioxus_free_icons::{
 };
 
 use crate::{
-    body::Body,
-    calendar::DayLog,
-    data::DataTransfer,
-    energy::BodyEnergy,
-    exercises::{ExerciseDetail, ExerciseDetailTab, ExerciseList, Exercises},
+    pages::body::Body,
+    pages::calendar::DayLog,
+    pages::data::DataTransfer,
+    pages::energy::BodyEnergy,
+    pages::exercises::{ExerciseDetail, ExerciseDetailTab, ExerciseList, Exercises},
     i18n::use_i18n,
-    overview::Overview,
-    progress::{MuscleProgress, TimeProgress, VolumeProgress},
-    routines::Routines,
-    session::{Session, SessionSummary},
-    settings::Settings,
-    workout::{RoutineDay, RoutineDayAdd, RoutineExerciseSwap, Workout},
+    pages::overview::Overview,
+    pages::progress::{MuscleProgress, TimeProgress, VolumeProgress},
+    pages::routines::Routines,
+    pages::session::{Session, SessionSummary},
+    pages::settings::Settings,
+    pages::workout::{RoutineDay, RoutineDayAdd, RoutineExerciseSwap, Workout},
 };
 
 #[derive(Debug, Clone, Routable, PartialEq, Eq)]
@@ -72,7 +72,7 @@ fn Shell() -> Element {
 
     #[cfg(target_os = "android")]
     {
-        let closes = use_context::<crate::ui::Sheets>().closes;
+        let closes = use_context::<crate::components::ui::Sheets>().closes;
         let navigator = use_navigator();
         use_future(move || async move {
             let mut eval = document::eval(

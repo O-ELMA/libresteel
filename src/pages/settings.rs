@@ -3,8 +3,8 @@ use dioxus::prelude::*;
 use crate::{
     db,
     i18n::use_i18n,
-    shell::Route,
-    ui::ForwardIcon,
+    components::shell::Route,
+    components::ui::{Card, ForwardIcon},
 };
 
 #[component]
@@ -132,7 +132,7 @@ pub fn Settings() -> Element {
             }
 
             h2 { class: "mt-7 text-sm font-semibold text-muted", "{i18n.t(\"settings.about\")}" }
-            div { class: "mt-2 rounded-2xl bg-tile p-4",
+            Card { class: "mt-2 p-4",
                 div { class: "flex items-center justify-between",
                     span { class: "text-base font-semibold", "LibreSteel" }
                     span { class: "text-sm text-muted", "v{env!(\"CARGO_PKG_VERSION\")}" }

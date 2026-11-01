@@ -8,19 +8,21 @@ use dioxus_free_icons::{
 };
 
 use crate::{
-    bodymap::BodyMap,
-    db,
-    exercises::{
-        art_for, equipment_options, matches_filters, summary, ExerciseFilters, ExerciseThumb, Thumb,
+    components::active_session::ActiveSessionPill,
+    components::bodymap::BodyMap,
+    components::exercise::{
+        art_for, equipment_options, matches_filters, summary, ExerciseFilters, ExerciseThumb,
+        Thumb,
     },
-    i18n::{use_i18n, I18n, WEEKDAYS},
-    routines::RoutineForm,
-    session::ActiveSessionPill,
-    shell::Route,
-    ui::{
+    components::routine_form::RoutineForm,
+    components::shell::Route,
+    components::ui::{
         km_text, minutes_text, option_text, parse_weight, use_exit, weight_field, BackIcon,
-        BodyIcon, DeleteButton, RowActions, Sheet,
+        BodyIcon, Button, ButtonSize, ButtonTone, Chip, DeleteButton, IconButton, IconShape, IconSize, IconTone, RowActions,
+        Sheet, TextField,
     },
+    db,
+    i18n::{use_i18n, I18n, WEEKDAYS},
 };
 
 const EXERCISE_PITCH: f64 = 88.0;
@@ -161,9 +163,12 @@ fn WorkoutScreen(route_day: Option<i64>) -> Element {
                 h1 { class: "min-w-0 flex-1 truncate text-[22px] font-bold tracking-tight",
                     "{routine.name}"
                 }
-                button {
-                    class: "grid size-11 shrink-0 place-items-center rounded-full border border-line text-lead",
-                    "aria-label": i18n.t("workout.bodyMap"),
+                IconButton {
+                    size: IconSize::Lg,
+                    tone: IconTone::Lead,
+                    shape: IconShape::Full,
+                    class: "shrink-0 border border-line",
+                    label: i18n.t("workout.bodyMap"),
                     onclick: move |_| focus.set(Some(Focus::Routine)),
                     BodyIcon { size: 20 }
                 }
@@ -219,18 +224,16 @@ fn WorkoutScreen(route_day: Option<i64>) -> Element {
                                     }
                                 }
                                 div { class: "flex items-start",
-                                    button {
-                                        class: "grid size-10 place-items-center text-muted",
-                                        "aria-label": i18n.t("workout.bodyMap"),
+                                    IconButton {
+                                        label: i18n.t("workout.bodyMap"),
                                         onclick: {
                                             let id = day.id;
                                             move |_| focus.set(Some(Focus::Day(id)))
                                         },
                                         BodyIcon { size: 18 }
                                     }
-                                    button {
-                                        class: "grid size-10 place-items-center text-muted",
-                                        "aria-label": i18n.t("workout.cloneDay"),
+                                    IconButton {
+                                        label: i18n.t("workout.cloneDay"),
                                         onclick: {
                                             let id = day.id;
                                             move |_| clone_day.set(Some(id))
@@ -571,9 +574,8 @@ fn DayList(
                             }
                         }
                         div { class: "flex shrink-0 items-start",
-                            button {
-                                class: "grid size-10 place-items-center text-muted",
-                                "aria-label": i18n.t("workout.cloneDay"),
+                            IconButton {
+                                label: i18n.t("workout.cloneDay"),
                                 onclick: {
                                     let id = day.id;
                                     move |event: MouseEvent| {
@@ -598,8 +600,10 @@ fn DayList(
                     }
                 }
             }
-            button {
-                class: "mt-4 flex h-12 w-full items-center justify-center gap-1.5 text-sm font-semibold text-accent-ink",
+            Button {
+                size: ButtonSize::Bare,
+                tone: ButtonTone::Ghost,
+                class: "mt-4 flex h-12 w-full items-center justify-center gap-1.5",
                 onclick: move |_| onadd.call(()),
                 Icon { icon: LdPlus, width: 18, height: 18 }
                 "{i18n.t(\"workout.addDay\")}"
@@ -738,8 +742,10 @@ fn DayExercises(
                     }
                 }
             }
-            button {
-                class: "mt-2 flex h-12 w-full items-center justify-center gap-1.5 text-sm font-semibold text-accent-ink",
+            Button {
+                size: ButtonSize::Bare,
+                tone: ButtonTone::Ghost,
+                class: "mt-2 flex h-12 w-full items-center justify-center gap-1.5",
                 onclick: move |_| onadd.call(()),
                 Icon { icon: LdPlus, width: 18, height: 18 }
                 "{i18n.t(\"workout.addExercise\")}"
@@ -817,12 +823,11 @@ fn DayForm(
                 onclick: move |_| onclose.call(()),
             }
             div { class: "relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sheet-panel{state}",
-                label { class: "block text-sm text-muted", "{i18n.t(\"routines.name\")}" }
-                input {
-                    class: "mt-2 h-12 w-full rounded-2xl bg-tile px-4 text-base text-lead outline-none",
+                TextField {
+                    label: i18n.t("routines.name"),
                     placeholder: i18n.t("workout.dayNamePlaceholder"),
-                    value: "{name}",
-                    oninput: move |event| name.set(event.value()),
+                    value: name.cloned(),
+                    oninput: move |value| name.set(value),
                 }
                 if weekday_mode {
                     div { class: "mt-4 text-sm text-muted", "{i18n.t(\"workout.weekday\")}" }
@@ -844,13 +849,9 @@ fn DayForm(
                         }
                     }
                 }
-                button {
-                    class: if can_save {
-                        "mt-6 h-12 w-full rounded-2xl bg-lilac text-base font-semibold text-black"
-                    } else {
-                        "mt-6 h-12 w-full rounded-2xl bg-tile text-base font-semibold text-muted"
-                    },
+                Button {
                     disabled: !can_save,
+                    class: "mt-6",
                     onclick: save,
                     "{i18n.t(\"common.actions.save\")}"
                 }
@@ -1316,12 +1317,7 @@ fn chooser(swap: Option<i64>, day_id: Option<i64>) -> Element {
             }
             if let Some(day_id) = day_id {
                 div { class: "px-5 pb-3",
-                    button {
-                        class: if chosen_count == 0 {
-                            "h-12 w-full rounded-2xl bg-tile text-base font-semibold text-muted"
-                        } else {
-                            "h-12 w-full rounded-2xl bg-lilac text-base font-semibold text-black"
-                        },
+                    Button {
                         disabled: chosen_count == 0,
                         onclick: move |_| match db::add_exercises(day_id, &chosen.cloned()) {
                             Ok(()) => {
@@ -1447,37 +1443,29 @@ fn DayClone(
             }
             div { class: "relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sheet-panel{state}",
                 h2 { class: "text-lg font-semibold", "{i18n.t(\"workout.cloneDay\")}" }
-                label { class: "mt-5 block text-sm text-muted", "{i18n.t(\"routines.name\")}" }
-                input {
-                    class: "mt-2 h-12 w-full rounded-2xl bg-tile px-4 text-base text-lead outline-none",
-                    value: "{name}",
-                    oninput: move |event| name.set(event.value()),
+                TextField {
+                    label: i18n.t("routines.name"),
+                    label_class: "mt-5",
+                    value: name.cloned(),
+                    oninput: move |value| name.set(value),
                 }
                 div { class: "mt-4 text-sm text-muted", "{i18n.t(\"workout.destination\")}" }
                 div { class: "mt-2 flex flex-wrap gap-2",
                     for routine in routines.iter() {
-                        button {
+                        Chip {
                             key: "{routine.id}",
-                            class: if target.cloned() == routine.id {
-                                "h-10 rounded-xl bg-lilac px-4 text-sm font-medium text-black"
-                            } else {
-                                "h-10 rounded-xl border border-line px-4 text-sm font-medium text-lead"
-                            },
+                            label: routine.name.clone(),
+                            selected: target.cloned() == routine.id,
                             onclick: {
                                 let id = routine.id;
                                 move |_| target.set(id)
                             },
-                            "{routine.name}"
                         }
                     }
                 }
-                button {
-                    class: if can_save {
-                        "mt-6 h-12 w-full rounded-2xl bg-lilac text-base font-semibold text-black"
-                    } else {
-                        "mt-6 h-12 w-full rounded-2xl bg-tile text-base font-semibold text-muted"
-                    },
+                Button {
                     disabled: !can_save,
+                    class: "mt-6",
                     onclick: save,
                     "{i18n.t(\"workout.cloneDay\")}"
                 }
