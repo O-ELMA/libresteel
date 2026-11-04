@@ -7,6 +7,7 @@ use dioxus_free_icons::{
 };
 
 use crate::{
+    components::active_session::Elapsed,
     components::exercise::{art_for, ExerciseThumb},
     components::shell::Route,
     components::ui::{
@@ -29,6 +30,9 @@ enum Field {
     Seconds,
     Distance,
 }
+
+#[allow(clippy::volatile_composites)]
+const BEEP: Asset = asset!("/assets/beep.mp3");
 
 #[derive(Clone, Copy, PartialEq)]
 enum Column {
@@ -140,6 +144,9 @@ fn LiveSession(session: ActiveSession) -> Element {
     let rest = use_signal(|| session.rest_until);
     let mut complete = use_signal(|| false);
     let mut drag_from = use_signal(|| None::<f64>);
+
+    #[cfg(target_os = "android")]
+    use_effect(crate::notify::request);
 
     let exercises = states.cloned();
     let total = exercises.len();
@@ -417,6 +424,10 @@ fn LiveSession(session: ActiveSession) -> Element {
                     BackIcon { size: 22 }
                 }
                 div { class: "absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-surface to-transparent" }
+                div { class: "absolute end-5 top-5 flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-sm text-white backdrop-blur",
+                    Icon { icon: LdTimer, width: 14, height: 14 }
+                    Elapsed { started_at: session.started_at }
+                }
             }
             div { class: "flex gap-1 px-5",
                 for (step, done) in done_exercises.iter().enumerate() {
@@ -543,6 +554,7 @@ fn LiveSession(session: ActiveSession) -> Element {
             div { class: "shrink-0",
                 if let Some(deadline) = rest.cloned() {
                     RestBand {
+                        key: "{deadline}",
                         deadline,
                         onadjust: move |delta: i64| {
                             save_rest(session.id, rest, Some(deadline.saturating_add(delta).max(db::now())));
@@ -761,10 +773,21 @@ fn FieldInput(
 fn RestBand(deadline: i64, onadjust: EventHandler<i64>) -> Element {
     let i18n = use_i18n();
     let mut now = use_signal(db::now);
+    let mut played = use_signal(|| false);
     use_future(move || async move {
         loop {
             futures_timer::Delay::new(Duration::from_millis(500)).await;
-            now.set(db::now());
+            let at = db::now();
+            now.set(at);
+            let remaining = deadline.saturating_sub(at);
+            if remaining <= 3 {
+                if remaining > 0 && !*played.peek() {
+                    played.set(true);
+                    beep();
+                }
+            } else if *played.peek() {
+                played.set(false);
+            }
         }
     });
     let remaining = deadline.saturating_sub(now());
@@ -1365,6 +1388,26 @@ fn clock(seconds: i64) -> String {
     let minutes = seconds / 60;
     let rest = seconds % 60;
     format!("{minutes:02}:{rest:02}")
+}
+
+fn beep() {
+    // WebKitGTK and Android WebView cannot load media from a custom URI scheme, so fetch the bytes and play a Blob URL.
+    let _ = document::eval(&format!(
+        r"
+        try {{
+            if (!window.__libresteelBeep) {{
+                const response = await fetch({src:?});
+                const blob = await response.blob();
+                window.__libresteelBeep = new Audio(URL.createObjectURL(blob));
+            }}
+            const audio = window.__libresteelBeep;
+            audio.currentTime = 0;
+            const playing = audio.play();
+            if (playing) playing.catch(() => {{}});
+        }} catch (err) {{}}
+        ",
+        src = BEEP.to_string()
+    ));
 }
 
 fn orm_text(value: f64) -> String {

@@ -14,13 +14,7 @@ pub fn ActiveSessionPill() -> Element {
     }) else {
         return rsx! {};
     };
-    let name = db::session_exercises(&active).map_or_else(
-        |_| active.name.clone(),
-        |rows| {
-            rows.get(db::current_position(&rows))
-                .map_or_else(|| active.name.clone(), |row| row.name.clone())
-        },
-    );
+    let name = exercise_name(&active);
     rsx! {
         div { class: "fixed bottom-24 left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-5",
             div {
@@ -58,4 +52,19 @@ pub fn Elapsed(started_at: i64) -> Element {
     rsx! {
         span { class: "font-semibold tabular-nums text-sky", "{long_clock(elapsed)}" }
     }
+}
+
+pub fn current_row(active: &db::ActiveSession) -> Option<db::SessionExercise> {
+    let rows = match db::session_exercises(active) {
+        Ok(rows) => rows,
+        Err(err) => {
+            dioxus::logger::tracing::error!("session exercises failed: {err:#}");
+            return None;
+        }
+    };
+    rows.get(db::current_position(&rows)).cloned()
+}
+
+pub fn exercise_name(active: &db::ActiveSession) -> String {
+    current_row(active).map_or_else(|| active.name.clone(), |row| row.name)
 }

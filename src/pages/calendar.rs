@@ -19,8 +19,8 @@ use crate::{
     i18n::{use_i18n, I18n},
 };
 
-#[derive(Clone, Copy, PartialEq)]
-enum Field {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Field {
     Weight,
     Reps,
     Seconds,
@@ -429,7 +429,7 @@ fn body_counts(rows: &[LogExercise]) -> Vec<(String, i64)> {
     counts.into_iter().collect()
 }
 
-fn fields(log_type: &str) -> &'static [Field] {
+pub fn fields(log_type: &str) -> &'static [Field] {
     match log_type {
         "weight_and_reps" => &[Field::Weight, Field::Reps],
         "reps" => &[Field::Reps],
@@ -440,7 +440,7 @@ fn fields(log_type: &str) -> &'static [Field] {
     }
 }
 
-fn field_label(i18n: &I18n, field: Field, log_type: &str) -> String {
+pub fn field_label(i18n: &I18n, field: Field, log_type: &str) -> String {
     match field {
         Field::Weight => i18n.t("common.labels.weight"),
         Field::Reps => i18n.t("common.labels.reps"),
@@ -466,7 +466,7 @@ fn field_text(field: Field, log_type: &str, set: &SessionSet, lb: bool) -> Strin
     }
 }
 
-fn field_cell(field: Field, log_type: &str, set: &SessionSet, lb: bool) -> String {
+pub fn field_cell(field: Field, log_type: &str, set: &SessionSet, lb: bool) -> String {
     let text = field_text(field, log_type, set, lb);
     if text.is_empty() {
         "—".to_string()
