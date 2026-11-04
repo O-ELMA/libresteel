@@ -96,6 +96,66 @@ fn Shell() -> Element {
                 }
             }
         });
+
+        use_future(move || async move {
+            // A killed process leaves its last notification in the tray; start from a clean slate.
+            crate::notify::clear();
+            let mut posted = false;
+            loop {
+                let live = match crate::db::active_session() {
+                    Ok(session) => session.map(|session| {
+                        let row = crate::components::active_session::current_row(&session);
+                        let name = row
+                            .as_ref()
+                            .map_or_else(|| session.name.clone(), |row| row.name.clone());
+                        let rest = session.rest_until.and_then(|deadline| {
+                            let remaining = deadline.saturating_sub(crate::db::now());
+                            let total = crate::db::rest_total(&session).unwrap_or_else(|err| {
+                                dioxus::logger::tracing::error!("rest total failed: {err:#}");
+                                0
+                            });
+                            (remaining > 0 && total > 0).then_some((remaining, total))
+                        });
+                        let body = rest.map_or_else(
+                            || i18n.t("session.startSet"),
+                            |(remaining, _)| {
+                                format!(
+                                    "{} {:02}:{:02}",
+                                    i18n.t("session.rest"),
+                                    remaining / 60,
+                                    remaining % 60
+                                )
+                            },
+                        );
+                        (name, body, session.started_at, rest)
+                    }),
+                    Err(err) => {
+                        dioxus::logger::tracing::error!("active session failed: {err:#}");
+                        None
+                    }
+                };
+                if let Some((name, body, started_at, rest)) = &live {
+                    crate::notify::show(name, body, *started_at, *rest);
+                    posted = true;
+                } else if posted {
+                    crate::notify::clear();
+                    posted = false;
+                }
+                futures_timer::Delay::new(std::time::Duration::from_secs(1)).await;
+            }
+        });
+
+        let start = route.clone();
+        use_future(move || {
+            let start = start.clone();
+            async move {
+                if !matches!(start, Route::Session {} | Route::SessionSummary {})
+                    && matches!(crate::db::active_session(), Ok(Some(_)))
+                {
+                    navigator.push(Route::Session {});
+                }
+            }
+        });
     }
 
     let live = matches!(

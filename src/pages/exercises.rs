@@ -12,12 +12,12 @@ use crate::{
     components::rm_chart::RmContent,
     components::shell::Route,
     components::ui::{
-        display_weight, option_text, set_orm, trim, weight_field, weight_unit, BackIcon,
+        display_weight, set_orm, trim, weight_unit, BackIcon,
     },
     db,
     i18n::{use_i18n, I18n},
     media,
-    pages::calendar::{local_date, long_date},
+    pages::calendar::{field_cell, field_label, fields, local_date, long_date},
 };
 
 #[allow(clippy::volatile_composites)]
@@ -378,7 +378,11 @@ fn HistoryTab(id: i64, log_type: String) -> Element {
                     }
                     div { class: "mt-3 flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted",
                         span { class: "w-8 shrink-0", "{i18n.t(\"common.labels.set\")}" }
-                        span { class: "flex-1", "{history_columns(&i18n, &log_type)}" }
+                        for (index, field) in fields(&log_type).iter().enumerate() {
+                            span { key: "{index}", class: "flex-1 text-center",
+                                "{field_label(&i18n, *field, &log_type)}"
+                            }
+                        }
                         span { class: "w-20 shrink-0 text-end", "{i18n.t(\"common.labels.oneRm\")}" }
                     }
                     {
@@ -392,7 +396,10 @@ fn HistoryTab(id: i64, log_type: String) -> Element {
                                 HistoryRow {
                                     key: "{set.set_number}",
                                     number: index.saturating_add(1),
-                                    value: history_value(&i18n, &log_type, set, lb),
+                                    cells: fields(&log_type)
+                                        .iter()
+                                        .map(|field| field_cell(*field, &log_type, set, lb))
+                                        .collect::<Vec<_>>(),
                                     orm: set_orm(set.weight, set.reps),
                                     best,
                                     lb,
@@ -409,7 +416,7 @@ fn HistoryTab(id: i64, log_type: String) -> Element {
 #[component]
 fn HistoryRow(
     number: usize,
-    value: String,
+    cells: Vec<String>,
     orm: Option<f64>,
     best: Option<f64>,
     lb: bool,
@@ -418,7 +425,9 @@ fn HistoryRow(
     rsx! {
         div { class: "flex items-center gap-2 py-2",
             span { class: "w-8 shrink-0 text-[15px] text-muted", "{number}" }
-            span { class: "flex-1 text-[15px] text-lead", "{value}" }
+            for (index, cell) in cells.iter().enumerate() {
+                span { key: "{index}", class: "flex-1 text-center text-[15px] text-lead", "{cell}" }
+            }
             span {
                 class: if highlight {
                     "w-20 shrink-0 text-end text-[15px] font-semibold text-lilac"
@@ -430,53 +439,6 @@ fn HistoryRow(
                 })}
             }
         }
-    }
-}
-
-fn history_columns(i18n: &I18n, log_type: &str) -> String {
-    match log_type {
-        "weight_and_reps" => i18n.t("exercises.history.weightReps"),
-        "reps" => i18n.t("exercises.history.reps"),
-        "duration" => i18n.t("exercises.history.duration"),
-        "reps_and_duration" => i18n.t("exercises.history.repsDuration"),
-        "cardio" => i18n.t("exercises.history.cardio"),
-        _ => String::new(),
-    }
-}
-
-fn history_value(i18n: &I18n, log_type: &str, set: &db::HistorySet, lb: bool) -> String {
-    let reps = option_text(set.reps);
-    let seconds = option_text(set.seconds);
-    let reps_label = i18n.t("common.labels.reps");
-    let secs_label = i18n.t("common.labels.secs");
-    match log_type {
-        "weight_and_reps" => set.weight.map_or_else(
-            || format!("{reps} {reps_label}"),
-            |weight| {
-                format!(
-                    "{} {} × {reps} {reps_label}",
-                    weight_field(Some(weight), lb),
-                    weight_unit(lb)
-                )
-            },
-        ),
-        "reps" => format!("{reps} {reps_label}"),
-        "duration" => format!("{seconds} {secs_label}"),
-        "reps_and_duration" => format!("{reps} {reps_label} × {seconds} {secs_label}"),
-        "cardio" => {
-            let minutes = set
-                .seconds
-                .map_or_else(String::new, |value| (value / 60).to_string());
-            let distance = set
-                .distance_m
-                .map_or_else(String::new, |value| trim(value / 1000.0));
-            format!(
-                "{minutes} {} · {distance} {}",
-                i18n.t("common.labels.min"),
-                i18n.t("common.labels.km")
-            )
-        }
-        _ => String::new(),
     }
 }
 

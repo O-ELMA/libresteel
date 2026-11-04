@@ -2,6 +2,8 @@ mod components;
 mod db;
 mod i18n;
 mod media;
+#[cfg(target_os = "android")]
+mod notify;
 mod pages;
 mod suggest;
 mod transfer;

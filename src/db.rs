@@ -1430,18 +1430,9 @@ pub struct SessionSet {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct HistorySet {
-    pub set_number: i64,
-    pub weight: Option<f64>,
-    pub reps: Option<i64>,
-    pub seconds: Option<i64>,
-    pub distance_m: Option<f64>,
-}
-
-#[derive(Clone, PartialEq)]
 pub struct HistorySession {
     pub started_at: i64,
-    pub sets: Vec<HistorySet>,
+    pub sets: Vec<SessionSet>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -1654,7 +1645,7 @@ pub fn exercise_history(
         Ok((
             row.get::<_, i64>(0)?,
             row.get::<_, i64>(1)?,
-            HistorySet {
+            SessionSet {
                 set_number: row.get(2)?,
                 weight: row.get(3)?,
                 reps: row.get(4)?,
@@ -1769,6 +1760,28 @@ pub fn session_exercises(session: &ActiveSession) -> Result<Vec<SessionExercise>
 
 pub fn finished_session_exercises(session: &ActiveSession) -> Result<Vec<SessionExercise>> {
     session_exercises_inner(session, true)
+}
+
+#[cfg(target_os = "android")]
+pub fn rest_total(session: &ActiveSession) -> Result<i64> {
+    let conn = connection()?;
+    let seconds = conn
+        .query_row(
+            "SELECT COALESCE(pe.rest_seconds,
+                             (SELECT rest_seconds FROM user_setting WHERE id = 1), 60)
+             FROM session_set s
+             JOIN session_exercise se ON se.id = s.session_exercise_id
+             LEFT JOIN plan_exercise pe
+                    ON pe.plan_day_id = ?2 AND pe.order_index = se.order_index
+             WHERE se.session_id = ?1
+             ORDER BY s.completed_at DESC, s.id DESC
+             LIMIT 1",
+            params![session.id, session.routine_day_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    drop(conn);
+    Ok(seconds.unwrap_or(0))
 }
 
 #[allow(clippy::too_many_lines)]
